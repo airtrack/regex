@@ -1,0 +1,14 @@
+*.user
+*.sdf
+*.suo
+*.swp
+*.opensdf
+*.DS_Store
+*.sublime-project
+*.sublime-workspace
+ipch/
+Debug/
+Release/
+DerivedData/
+project.xcworkspace/
+xcuserdata/
