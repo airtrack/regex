@@ -8,8 +8,8 @@ namespace regex
     class ParseException
     {
     public:
-        explicit ParseException(const std::string &desc)
-            : desc_(desc)
+        ParseException(const std::string &desc, std::size_t pos)
+            : desc_(desc), pos_(pos)
         {
         }
 
@@ -18,8 +18,14 @@ namespace regex
             return desc_;
         }
 
+        std::size_t Position() const
+        {
+            return pos_;
+        }
+
     private:
         std::string desc_;
+        std::size_t pos_;
     };
 } // namespace regex
 

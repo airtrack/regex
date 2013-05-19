@@ -48,7 +48,7 @@ namespace regex
         class ConcatenationNode : public ASTNode
         {
         public:
-            void AddNode(std::unique_ptr<ASTNode> &node)
+            void AddNode(std::unique_ptr<ASTNode> node)
             {
                 nodes_.push_back(std::move(node));
             }
@@ -61,7 +61,7 @@ namespace regex
         class AlternationNode : public ASTNode
         {
         public:
-            void AddNode(std::unique_ptr<ASTNode> &node)
+            void AddNode(std::unique_ptr<ASTNode> node)
             {
                 nodes_.push_back(std::move(node));
             }
@@ -74,7 +74,7 @@ namespace regex
         class ClosureNode : public ASTNode
         {
         public:
-            explicit ClosureNode(std::unique_ptr<ASTNode> &node)
+            explicit ClosureNode(std::unique_ptr<ASTNode> node)
                 : node_(std::move(node))
             {
             }
