@@ -6,24 +6,20 @@
 	objectVersion = 46;
 	objects = {
 
-/* Begin PBXCopyFilesBuildPhase section */
-		CE760B441747D2B70038824A /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = /usr/share/man/man1/;
-			dstSubfolderSpec = 0;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 1;
-		};
-/* End PBXCopyFilesBuildPhase section */
+/* Begin PBXBuildFile section */
+		CEEEA2EA17487C07007D4322 /* RegexParser.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CEEEA2E01748769C007D4322 /* RegexParser.cpp */; };
+		CEEEA2EC17487FD1007D4322 /* RegexException.h in Headers */ = {isa = PBXBuildFile; fileRef = CEEEA2EB17487FD1007D4322 /* RegexException.h */; };
+/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		CE760B461747D2B70038824A /* regex */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = regex; sourceTree = BUILT_PRODUCTS_DIR; };
+		CEEEA2DF1748726B007D4322 /* RegexParser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RegexParser.h; path = ../src/RegexParser.h; sourceTree = "<group>"; };
+		CEEEA2E01748769C007D4322 /* RegexParser.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = RegexParser.cpp; path = ../src/RegexParser.cpp; sourceTree = "<group>"; };
+		CEEEA2E617487BEA007D4322 /* libregex.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libregex.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		CEEEA2EB17487FD1007D4322 /* RegexException.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RegexException.h; path = ../src/RegexException.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		CE760B431747D2B70038824A /* Frameworks */ = {
+		CEEEA2E317487BEA007D4322 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -36,7 +32,7 @@
 		CE760B3D1747D2B70038824A = {
 			isa = PBXGroup;
 			children = (
-				CE760B481747D2B70038824A /* regex */,
+				CEEEA2DE1748721F007D4322 /* src */,
 				CE760B471747D2B70038824A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -44,28 +40,42 @@
 		CE760B471747D2B70038824A /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				CE760B461747D2B70038824A /* regex */,
+				CEEEA2E617487BEA007D4322 /* libregex.a */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		CE760B481747D2B70038824A /* regex */ = {
+		CEEEA2DE1748721F007D4322 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				CEEEA2DF1748726B007D4322 /* RegexParser.h */,
+				CEEEA2E01748769C007D4322 /* RegexParser.cpp */,
+				CEEEA2EB17487FD1007D4322 /* RegexException.h */,
 			);
-			path = regex;
+			name = src;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
+/* Begin PBXHeadersBuildPhase section */
+		CEEEA2E417487BEA007D4322 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CEEEA2EC17487FD1007D4322 /* RegexException.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
 /* Begin PBXNativeTarget section */
-		CE760B451747D2B70038824A /* regex */ = {
+		CEEEA2E517487BEA007D4322 /* regex */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = CE760B4F1747D2B70038824A /* Build configuration list for PBXNativeTarget "regex" */;
+			buildConfigurationList = CEEEA2E717487BEA007D4322 /* Build configuration list for PBXNativeTarget "regex" */;
 			buildPhases = (
-				CE760B421747D2B70038824A /* Sources */,
-				CE760B431747D2B70038824A /* Frameworks */,
-				CE760B441747D2B70038824A /* CopyFiles */,
+				CEEEA2E217487BEA007D4322 /* Sources */,
+				CEEEA2E317487BEA007D4322 /* Frameworks */,
+				CEEEA2E417487BEA007D4322 /* Headers */,
 			);
 			buildRules = (
 			);
@@ -73,8 +83,8 @@
 			);
 			name = regex;
 			productName = regex;
-			productReference = CE760B461747D2B70038824A /* regex */;
-			productType = "com.apple.product-type.tool";
+			productReference = CEEEA2E617487BEA007D4322 /* libregex.a */;
+			productType = "com.apple.product-type.library.static";
 		};
 /* End PBXNativeTarget section */
 
@@ -97,16 +107,17 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				CE760B451747D2B70038824A /* regex */,
+				CEEEA2E517487BEA007D4322 /* regex */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
-		CE760B421747D2B70038824A /* Sources */ = {
+		CEEEA2E217487BEA007D4322 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CEEEA2EA17487C07007D4322 /* RegexParser.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,7 +129,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LANGUAGE_STANDARD = "c++0x";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
@@ -150,7 +161,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LANGUAGE_STANDARD = "c++0x";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
@@ -170,16 +181,20 @@
 			};
 			name = Release;
 		};
-		CE760B501747D2B70038824A /* Debug */ = {
+		CEEEA2E817487BEA007D4322 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "c++0x";
+				EXECUTABLE_PREFIX = lib;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
 		};
-		CE760B511747D2B70038824A /* Release */ = {
+		CEEEA2E917487BEA007D4322 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "c++0x";
+				EXECUTABLE_PREFIX = lib;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
@@ -196,11 +211,11 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		CE760B4F1747D2B70038824A /* Build configuration list for PBXNativeTarget "regex" */ = {
+		CEEEA2E717487BEA007D4322 /* Build configuration list for PBXNativeTarget "regex" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				CE760B501747D2B70038824A /* Debug */,
-				CE760B511747D2B70038824A /* Release */,
+				CEEEA2E817487BEA007D4322 /* Debug */,
+				CEEEA2E917487BEA007D4322 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 		};
