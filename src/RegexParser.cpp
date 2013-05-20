@@ -48,11 +48,29 @@ namespace regex
             std::size_t index_;
         };
 
+        bool IsEscapeChar(int c)
+        {
+            return c == '[' || c == ']' ||
+                   c == '(' || c == ')' ||
+                   c == '*' || c == '|';
+        }
+
         std::unique_ptr<ASTNode> ParseRE(LexStream &stream);
 
         std::unique_ptr<ASTNode> ParseChar(LexStream &stream)
         {
             int c = stream.Get();
+            if (c == EOF)
+                throw ParseException("unexpect EOF", stream.Index());
+
+            if (IsEscapeChar(c))
+            {
+                std::string err("unexpect '");
+                err.push_back(c);
+                err.push_back('\'');
+                throw ParseException(err, stream.Index());
+            }
+
             stream.Next();
             return std::unique_ptr<ASTNode>(new CharNode(c));
         }
@@ -126,7 +144,7 @@ namespace regex
 
             concat->AddNode(std::move(node));
 
-            while (stream.Get() != EOF && stream.Get() != '|')
+            while (stream.Get() != EOF && stream.Get() != '|' && stream.Get() != ')')
             {
                 node = ParseConcatBase(stream);
                 concat->AddNode(std::move(node));
@@ -160,8 +178,6 @@ namespace regex
         std::unique_ptr<ASTNode> Parse(const std::string &re)
         {
             LexStream stream(re);
-            if (stream.Get() == EOF)
-                throw ParseException("empty regular expression", 0);
             return ParseRE(stream);
         }
     } // namespace parser
