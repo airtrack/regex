@@ -15,6 +15,8 @@ namespace regex
                 Type_Accept,
                 Type_Normal,
             } type_;
+
+            explicit Node(Type t = Type_Normal) : type_(t) { }
         };
 
         struct Edge
@@ -25,6 +27,11 @@ namespace regex
 
             // Is edge epsilon or not
             bool is_epsilon_;
+
+            Edge() : is_epsilon_(true) { }
+
+            explicit Edge(const std::function<bool (int)> &e)
+                : e_(e), is_epsilon_(false) { }
         };
     } // namespace automata
 } // namespace regex
