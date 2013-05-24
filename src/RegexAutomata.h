@@ -14,9 +14,16 @@ namespace regex
                 Type_Start,
                 Type_Accept,
                 Type_Normal,
-            } type_;
+            };
 
-            explicit Node(Type t = Type_Normal) : type_(t) { }
+            // Type of this node
+            Type type_;
+
+            // Index and number of this node
+            std::size_t index_;
+
+            Node(std::size_t index, Type t)
+                : index_(index), type_(t) { }
         };
 
         struct Edge

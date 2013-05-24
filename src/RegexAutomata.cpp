@@ -67,7 +67,8 @@ namespace regex
 
             const Node * AddNode(Node::Type t = Node::Type_Normal)
             {
-                auto node = new Node(t);
+                auto index = nodes_.size();
+                auto node = new Node(index, t);
                 nodes_.push_back(std::unique_ptr<Node>(node));
                 return node;
             }
