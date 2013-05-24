@@ -2,7 +2,7 @@
 #include "RegexParser.h"
 #include <vector>
 #include <memory>
-#include <map>
+#include <unordered_map>
 #include <assert.h>
 
 namespace regex
@@ -18,6 +18,7 @@ namespace regex
             NodeMap(const NodeMap &) = delete;
             void operator = (const NodeMap &) = delete;
 
+            // Get first node-edge mapped node
             const Node * Map(const Node *node, const Edge *edge)
             {
                 auto key = std::make_pair(node, edge);
@@ -28,21 +29,32 @@ namespace regex
                     return nullptr;
             }
 
+            // Add node1-edge-node2 map
             void Set(const Node *node1, const Edge *edge, const Node *node2)
             {
                 auto key = std::make_pair(node1, edge);
-                map_.erase(key);
                 map_.insert(std::make_pair(key, node2));
             }
 
         private:
-            std::map<std::pair<const Node *, const Edge *>, const Node *> map_;
+            struct NodeEdgeHash
+            {
+                std::size_t operator () (const std::pair<const Node *,
+                                                         const Edge *> &pair) const
+                {
+                    return std::hash<const Node *>()(pair.first) *
+                           std::hash<const Edge *>()(pair.second);
+                }
+            };
+
+            std::unordered_multimap<std::pair<const Node *, const Edge *>,
+                                    const Node *, NodeEdgeHash> map_;
         };
 
         class NFA
         {
         public:
-            NFA() { }
+            NFA() : start_(nullptr), accept_(nullptr) { }
             NFA(const NFA &) = delete;
             void operator = (const NFA &) = delete;
 
@@ -75,11 +87,36 @@ namespace regex
                 return &epsilon_;
             }
 
+            void SetStartNode(const Node *node)
+            {
+                start_ = node;
+                const_cast<Node *>(start_)->type_ = Node::Type_Start;
+            }
+
+            const Node * GetStartNode() const
+            {
+                return start_;
+            }
+
+            void SetAcceptNode(const Node *node)
+            {
+                accept_ = node;
+                const_cast<Node *>(accept_)->type_ = Node::Type_Accept;
+            }
+
+            const Node * GetAcceptNode() const
+            {
+                return accept_;
+            }
+
         private:
             std::vector<std::unique_ptr<Edge>> edges_;
             std::vector<std::unique_ptr<Node>> nodes_;
             NodeMap node_map_;
             Edge epsilon_;
+
+            const Node *start_;
+            const Node *accept_;
         };
 
         class NFAConverterVisitor : public Visitor
@@ -203,8 +240,8 @@ namespace regex
             NFAConverterVisitor::DataType pair;
             ast->Accept(&visitor, &pair);
 
-            const_cast<Node *>(pair.first)->type_ = Node::Type_Start;
-            const_cast<Node *>(pair.second)->type_ = Node::Type_Accept;
+            nfa->SetStartNode(pair.first);
+            nfa->SetAcceptNode(pair.second);
 
             return std::move(nfa);
         }
