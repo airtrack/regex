@@ -12,6 +12,7 @@ namespace regex
     {
         using namespace parser;
 
+        template<typename NodeType, typename EdgeType>
         class NodeMap
         {
         public:
@@ -20,7 +21,7 @@ namespace regex
             void operator = (const NodeMap &) = delete;
 
             // Get first node-edge mapped node
-            const Node * Map(const Node *node, const Edge *edge)
+            const NodeType * Map(const NodeType *node, const EdgeType *edge)
             {
                 auto key = std::make_pair(node, edge);
                 auto it = map_.find(key);
@@ -31,7 +32,7 @@ namespace regex
             }
 
             // Add node1-edge-node2 map
-            void Set(const Node *node1, const Edge *edge, const Node *node2)
+            void Set(const NodeType *node1, const EdgeType *edge, const NodeType *node2)
             {
                 auto key = std::make_pair(node1, edge);
                 map_.insert(std::make_pair(key, node2));
@@ -40,16 +41,16 @@ namespace regex
         private:
             struct NodeEdgeHash
             {
-                std::size_t operator () (const std::pair<const Node *,
-                                                         const Edge *> &pair) const
+                std::size_t operator () (const std::pair<const NodeType *,
+                                                         const EdgeType *> &pair) const
                 {
-                    return std::hash<const Node *>()(pair.first) *
-                           std::hash<const Edge *>()(pair.second);
+                    return std::hash<const NodeType *>()(pair.first) *
+                           std::hash<const EdgeType *>()(pair.second);
                 }
             };
 
-            std::unordered_multimap<std::pair<const Node *, const Edge *>,
-                                    const Node *, NodeEdgeHash> map_;
+            std::unordered_multimap<std::pair<const NodeType *, const EdgeType *>,
+                                    const NodeType *, NodeEdgeHash> map_;
         };
 
         class NFA
@@ -114,7 +115,7 @@ namespace regex
         private:
             std::vector<std::unique_ptr<Edge>> edges_;
             std::vector<std::unique_ptr<Node>> nodes_;
-            NodeMap node_map_;
+            NodeMap<Node, Edge> node_map_;
             Edge epsilon_;
 
             const Node *start_;
