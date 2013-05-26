@@ -36,7 +36,7 @@ namespace regex
             char c_;
         };
 
-        // Node for character range. e.g: [a-z]
+        // Node for character range. e.g., [a-z]
         class CharRangeNode : public ASTNode
         {
         public:
@@ -48,7 +48,7 @@ namespace regex
             char last_;
         };
 
-        // Concat two or more regex together. e.g: a[a-z]b
+        // Node for concatenate regex two or more. e.g., a[a-z]b
         class ConcatenationNode : public ASTNode
         {
         public:
@@ -62,7 +62,7 @@ namespace regex
             std::vector<std::unique_ptr<ASTNode>> nodes_;
         };
 
-        // Alternation for two or more regex. e.g: a | b | c
+        // Node for alternate regex two or more. e.g., a | b | c
         class AlternationNode : public ASTNode
         {
         public:
@@ -76,7 +76,7 @@ namespace regex
             std::vector<std::unique_ptr<ASTNode>> nodes_;
         };
 
-        // Node for repeat zero or more regex. e.g: a*
+        // Node for repeat regex zero or more. e.g., a*
         class ClosureNode : public ASTNode
         {
         public:
