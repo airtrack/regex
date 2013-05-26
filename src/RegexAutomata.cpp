@@ -1,6 +1,7 @@
 #include "RegexAutomata.h"
 #include "RegexParser.h"
 #include <vector>
+#include <queue>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -60,6 +61,10 @@ namespace regex
             NFA(const NFA &) = delete;
             void operator = (const NFA &) = delete;
 
+            typedef std::vector<std::unique_ptr<Node>> NodeList;
+            typedef std::vector<std::unique_ptr<Edge>> EdgeList;
+            typedef EdgeList::const_iterator EdgeIterator;
+
             const Edge * AddEdge(const std::function<bool (int)> &e)
             {
                 auto edge = new Edge(e);
@@ -112,9 +117,29 @@ namespace regex
                 return accept_;
             }
 
+            std::size_t NodeCount() const
+            {
+                return nodes_.size();
+            }
+
+            // Get edge begin and end iterator pair
+            std::pair<EdgeIterator, EdgeIterator> GetEdgeIterators() const
+            {
+                return std::make_pair(edges_.begin(), edges_.end());
+            }
+
+            // Get node by index
+            const Node * GetNode(std::size_t index) const
+            {
+                if (index < nodes_.size())
+                    return nodes_[index].get();
+                else
+                    return nullptr;
+            }
+
         private:
-            std::vector<std::unique_ptr<Edge>> edges_;
-            std::vector<std::unique_ptr<Node>> nodes_;
+            EdgeList edges_;
+            NodeList nodes_;
             NodeMap<Node, Edge> node_map_;
             Edge epsilon_;
 
@@ -198,23 +223,23 @@ namespace regex
 
         void NFAConverterVisitor::Visit(AlternationNode *ast, void *data)
         {
-            std::vector<const Node *> allFirst;
-            std::vector<const Node *> allLast;
+            std::vector<const Node *> all_first;
+            std::vector<const Node *> all_last;
 
             for (auto it = ast->nodes_.begin(); it != ast->nodes_.end(); ++it)
             {
                 DataType pair;
                 (*it)->Accept(this, &pair);
-                allFirst.push_back(pair.first);
-                allLast.push_back(pair.second);
+                all_first.push_back(pair.first);
+                all_last.push_back(pair.second);
             }
 
             auto node1 = nfa_->AddNode();
-            for (auto it = allFirst.begin(); it != allFirst.end(); ++it)
+            for (auto it = all_first.begin(); it != all_first.end(); ++it)
                 nfa_->SetMap(node1, nfa_->GetEpsilon(), *it);
 
             auto node2 = nfa_->AddNode();
-            for (auto it = allLast.begin(); it != allLast.end(); ++it)
+            for (auto it = all_last.begin(); it != all_last.end(); ++it)
                 nfa_->SetMap(*it, nfa_->GetEpsilon(), node2);
 
             FillData(data, node1, node2);
@@ -255,7 +280,7 @@ namespace regex
         {
             friend struct BitSetHash;
         public:
-            explicit BitSet(std::size_t elemCount);
+            explicit BitSet(std::size_t elem_count);
 
             // Set has index element
             void Set(std::size_t index);
@@ -263,10 +288,16 @@ namespace regex
             // Is index element set
             bool IsSet(std::size_t index) const;
 
+            // Get element count of set
+            std::size_t ElemCount() const
+            {
+                return elem_count_;
+            }
+
             friend bool operator == (const BitSet &left,
                                      const BitSet &right)
             {
-                return left.elemCount_ == right.elemCount_ &&
+                return left.elem_count_ == right.elem_count_ &&
                        left.bits_ == right.bits_;
             }
 
@@ -278,42 +309,42 @@ namespace regex
 
         private:
             static const std::size_t kUnsignedIntBits = 32;
-            std::size_t GetIntCount(std::size_t elemCount);
+            std::size_t GetIntCount(std::size_t elem_count);
 
-            std::size_t elemCount_;
+            std::size_t elem_count_;
             std::vector<unsigned int> bits_;
         };
 
-        BitSet::BitSet(std::size_t elemCount)
-            : elemCount_(elemCount),
-              bits_(GetIntCount(elemCount))
+        BitSet::BitSet(std::size_t elem_count)
+            : elem_count_(elem_count),
+              bits_(GetIntCount(elem_count))
         {
         }
 
         void BitSet::Set(std::size_t index)
         {
-            std::size_t unsignedIntIndex = index / kUnsignedIntBits;
-            std::size_t bitIndex = index % kUnsignedIntBits;
+            std::size_t unsigned_int_index = index / kUnsignedIntBits;
+            std::size_t bit_index = index % kUnsignedIntBits;
 
-            if (unsignedIntIndex < bits_.size())
-                bits_[unsignedIntIndex] |= 0x1 >> bitIndex;
+            if (unsigned_int_index < bits_.size())
+                bits_[unsigned_int_index] |= 0x1 >> bit_index;
         }
 
         bool BitSet::IsSet(std::size_t index) const
         {
-            std::size_t unsignedIntIndex = index / kUnsignedIntBits;
-            std::size_t bitIndex = index % kUnsignedIntBits;
+            std::size_t unsigned_int_index = index / kUnsignedIntBits;
+            std::size_t bit_index = index % kUnsignedIntBits;
 
-            if (unsignedIntIndex < bits_.size())
-                return (bits_[unsignedIntIndex] & (0x1 >> bitIndex)) != 0;
+            if (unsigned_int_index < bits_.size())
+                return (bits_[unsigned_int_index] & (0x1 >> bit_index)) != 0;
             else
                 return false;
         }
 
-        std::size_t BitSet::GetIntCount(std::size_t elemCount)
+        std::size_t BitSet::GetIntCount(std::size_t elem_count)
         {
-            return elemCount / kUnsignedIntBits +
-                  (elemCount % kUnsignedIntBits == 0 ? 0 : 1);
+            return elem_count / kUnsignedIntBits +
+                  (elem_count % kUnsignedIntBits == 0 ? 0 : 1);
         }
 
         struct BitSetHash
@@ -339,32 +370,87 @@ namespace regex
             BitSetSet(const BitSetSet &) = delete;
             void operator = (const BitSetSet &) = delete;
 
-            // Add a BitSet and return the pointer of BitSet
-            // in the BitSetSet
-            const BitSet * AddBitSet(const BitSet &bitset)
+            // Add a BitSet, return the pointer of BitSet in the
+            // BitSetSet and the bitset is existed or not
+            std::pair<const BitSet *, bool> AddBitSet(const BitSet &bitset)
             {
                 auto pair = bitsets_.insert(bitset);
-                return &(*pair.first);
-            }
-
-            // Get the pointer of BitSet from the BitSetSet
-            const BitSet * GetBitSet(const BitSet &bitset)
-            {
-                auto it = bitsets_.find(bitset);
-                if (it == bitsets_.end())
-                    return nullptr;
-                else
-                    return &(*it);
-            }
-
-            // Is BitSetSet has BitSet or not
-            bool HasBitSet(const BitSet &bitset)
-            {
-                return bitsets_.find(bitset) != bitsets_.end();
+                return std::make_pair(&(*pair.first), !pair.second);
             }
 
         private:
             std::unordered_set<BitSet, BitSetHash> bitsets_;
         };
+
+        // Epsilon closure the bitset
+        void EpsilonClosure(const std::unique_ptr<NFA> &nfa, BitSet &bitset)
+        {
+        }
+
+        // Subset construct start BitSet from NFA
+        const BitSet * ConstructStartBitSet(const std::unique_ptr<NFA> &nfa,
+                                            BitSetSet &subsets)
+        {
+            BitSet q0(nfa->NodeCount());
+            q0.Set(nfa->GetStartNode()->index_);
+            EpsilonClosure(nfa, q0);
+            return subsets.AddBitSet(q0).first;
+        }
+
+        // First value of return pair is next BitSet from 'q' BitSet through edge,
+        // second value of return pair indicate first value of return pair need add
+        // to work list or not
+        std::pair<const BitSet *, bool> ConstructDelta(const std::unique_ptr<NFA> &nfa,
+                                                       const BitSet *q,
+                                                       const Edge *edge,
+                                                       BitSetSet &subsets)
+        {
+            BitSet t(nfa->NodeCount());
+
+            auto count = q->ElemCount();
+            for (std::size_t i = 0; i < count; ++i)
+            {
+                if (q->IsSet(i))
+                {
+                    auto node1 = nfa->GetNode(i);
+                    auto node2 = nfa->Map(node1, edge);
+                    if (node2)
+                        t.Set(node2->index_);
+                }
+            }
+
+            EpsilonClosure(nfa, t);
+            auto pair = subsets.AddBitSet(t);
+
+            return std::make_pair(pair.first, !pair.second);
+        }
+
+        void SubsetConstruction(const std::unique_ptr<NFA> &nfa)
+        {
+            BitSetSet subsets;
+            auto q0 = ConstructStartBitSet(nfa, subsets);
+
+            std::queue<const BitSet *> work_list;
+            work_list.push(q0);
+
+            auto edge_iter_pair = nfa->GetEdgeIterators();
+
+            NodeMap<BitSet, Edge> node_map;
+            while (!work_list.empty())
+            {
+                auto q = work_list.front();
+                work_list.pop();
+
+                for (auto it = edge_iter_pair.first;
+                     it != edge_iter_pair.second; ++it)
+                {
+                    auto pair = ConstructDelta(nfa, q, (*it).get(), subsets);
+                    node_map.Set(q, (*it).get(), pair.first);
+
+                    if (pair.second)
+                        work_list.push(pair.first);
+                }
+            }
+        }
     } // namespace automata
 } // namespace regex
