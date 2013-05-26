@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <assert.h>
 
 namespace regex
@@ -120,6 +121,7 @@ namespace regex
             const Node *accept_;
         };
 
+        // Visitor for convert AST to NFA
         class NFAConverterVisitor : public Visitor
         {
         public:
@@ -246,5 +248,122 @@ namespace regex
 
             return std::move(nfa);
         }
+
+        // Bit set for subset construction
+        class BitSet
+        {
+            friend struct BitSetHash;
+        public:
+            explicit BitSet(std::size_t elemCount);
+
+            // Set has index element
+            void Set(std::size_t index);
+
+            // Is index element set
+            bool IsSet(std::size_t index) const;
+
+            friend bool operator == (const BitSet &left,
+                                     const BitSet &right)
+            {
+                return left.elemCount_ == right.elemCount_ &&
+                       left.bits_ == right.bits_;
+            }
+
+            friend bool operator != (const BitSet &left,
+                                     const BitSet &right)
+            {
+                return !(left == right);
+            }
+
+        private:
+            static const std::size_t kUnsignedIntBits = 32;
+            std::size_t GetIntCount(std::size_t elemCount);
+
+            std::size_t elemCount_;
+            std::vector<unsigned int> bits_;
+        };
+
+        BitSet::BitSet(std::size_t elemCount)
+            : elemCount_(elemCount),
+              bits_(GetIntCount(elemCount))
+        {
+        }
+
+        void BitSet::Set(std::size_t index)
+        {
+            std::size_t unsignedIntIndex = index / kUnsignedIntBits;
+            std::size_t bitIndex = index % kUnsignedIntBits;
+
+            if (unsignedIntIndex < bits_.size())
+                bits_[unsignedIntIndex] |= 0x1 >> bitIndex;
+        }
+
+        bool BitSet::IsSet(std::size_t index) const
+        {
+            std::size_t unsignedIntIndex = index / kUnsignedIntBits;
+            std::size_t bitIndex = index % kUnsignedIntBits;
+
+            if (unsignedIntIndex < bits_.size())
+                return (bits_[unsignedIntIndex] & (0x1 >> bitIndex)) != 0;
+            else
+                return false;
+        }
+
+        std::size_t BitSet::GetIntCount(std::size_t elemCount)
+        {
+            return elemCount / kUnsignedIntBits +
+                  (elemCount % kUnsignedIntBits == 0 ? 0 : 1);
+        }
+
+        struct BitSetHash
+        {
+            std::size_t operator () (const BitSet &bitset) const
+            {
+                std::hash<unsigned int> h;
+
+                std::size_t result = 1;
+                for (auto it = bitset.bits_.begin(); it != bitset.bits_.end(); ++it)
+                    result *= h(*it);
+
+                return result;
+            }
+        };
+
+        // Set of BitSet for subset construction
+        class BitSetSet
+        {
+        public:
+            BitSetSet() { }
+
+            BitSetSet(const BitSetSet &) = delete;
+            void operator = (const BitSetSet &) = delete;
+
+            // Add a BitSet and return the pointer of BitSet
+            // in the BitSetSet
+            const BitSet * AddBitSet(const BitSet &bitset)
+            {
+                auto pair = bitsets_.insert(bitset);
+                return &(*pair.first);
+            }
+
+            // Get the pointer of BitSet from the BitSetSet
+            const BitSet * GetBitSet(const BitSet &bitset)
+            {
+                auto it = bitsets_.find(bitset);
+                if (it == bitsets_.end())
+                    return nullptr;
+                else
+                    return &(*it);
+            }
+
+            // Is BitSetSet has BitSet or not
+            bool HasBitSet(const BitSet &bitset)
+            {
+                return bitsets_.find(bitset) != bitsets_.end();
+            }
+
+        private:
+            std::unordered_set<BitSet, BitSetHash> bitsets_;
+        };
     } // namespace automata
 } // namespace regex
