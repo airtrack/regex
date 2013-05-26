@@ -17,6 +17,7 @@ namespace regex
 #define VISIT_NODE(node)                                \
     virtual void Visit(node *n, void *data)
 
+        // Abstract syntax tree node for regex
         class ASTNode
         {
         public:
@@ -24,6 +25,7 @@ namespace regex
             virtual ~ASTNode() { }
         };
 
+        // Node for one character
         class CharNode : public ASTNode
         {
         public:
@@ -34,6 +36,7 @@ namespace regex
             char c_;
         };
 
+        // Node for character range. e.g: [a-z]
         class CharRangeNode : public ASTNode
         {
         public:
@@ -45,6 +48,7 @@ namespace regex
             char last_;
         };
 
+        // Concat two or more regex together. e.g: a[a-z]b
         class ConcatenationNode : public ASTNode
         {
         public:
@@ -58,6 +62,7 @@ namespace regex
             std::vector<std::unique_ptr<ASTNode>> nodes_;
         };
 
+        // Alternation for two or more regex. e.g: a | b | c
         class AlternationNode : public ASTNode
         {
         public:
@@ -71,6 +76,7 @@ namespace regex
             std::vector<std::unique_ptr<ASTNode>> nodes_;
         };
 
+        // Node for repeat zero or more regex. e.g: a*
         class ClosureNode : public ASTNode
         {
         public:

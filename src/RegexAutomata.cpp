@@ -13,6 +13,7 @@ namespace regex
     {
         using namespace parser;
 
+        // Template class to map (NodeType, EdgeType) to NodeType
         template<typename NodeType, typename EdgeType>
         class NodeMap
         {
@@ -405,6 +406,7 @@ namespace regex
                                                        const Edge *edge,
                                                        BitSetSet &subsets)
         {
+            assert(nfa->NodeCount() == q->ElemCount());
             BitSet t(nfa->NodeCount());
 
             auto count = q->ElemCount();
