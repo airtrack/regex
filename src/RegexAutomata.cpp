@@ -383,59 +383,92 @@ namespace regex
             std::unordered_set<BitSet, BitSetHash> bitsets_;
         };
 
-        // Epsilon closure the bitset
-        void EpsilonClosure(const std::unique_ptr<NFA> &nfa, BitSet &bitset)
+        // Construct DFA from NFA
+        class DFAConstructor
+        {
+        public:
+            explicit DFAConstructor(std::unique_ptr<NFA> nfa);
+
+            DFAConstructor(const DFAConstructor &) = delete;
+            void operator = (const DFAConstructor &) = delete;
+
+        private:
+            // Construct epsilon closure
+            void ConstructEpsilonClosure();
+
+            // Epsilon closure the bitset
+            void EpsilonClosure(BitSet &bitset);
+
+            // Subset construct start BitSet from NFA
+            const BitSet * ConstructStartBitSet();
+
+            // First value of return pair is next BitSet from 'q' BitSet through edge,
+            // second value of return pair indicate first value of return pair need add
+            // to work list or not
+            std::pair<const BitSet *, bool> ConstructDelta(const BitSet *q,
+                                                           const Edge *edge);
+
+            // Construct subsets_ from NFA
+            void SubsetConstruction();
+
+            std::unique_ptr<NFA> nfa_;
+            BitSetSet subsets_;
+        };
+
+        DFAConstructor::DFAConstructor(std::unique_ptr<NFA> nfa)
+            : nfa_(std::move(nfa))
         {
         }
 
-        // Subset construct start BitSet from NFA
-        const BitSet * ConstructStartBitSet(const std::unique_ptr<NFA> &nfa,
-                                            BitSetSet &subsets)
+        void DFAConstructor::ConstructEpsilonClosure()
         {
-            BitSet q0(nfa->NodeCount());
-            q0.Set(nfa->GetStartNode()->index_);
-            EpsilonClosure(nfa, q0);
-            return subsets.AddBitSet(q0).first;
         }
 
-        // First value of return pair is next BitSet from 'q' BitSet through edge,
-        // second value of return pair indicate first value of return pair need add
-        // to work list or not
-        std::pair<const BitSet *, bool> ConstructDelta(const std::unique_ptr<NFA> &nfa,
-                                                       const BitSet *q,
-                                                       const Edge *edge,
-                                                       BitSetSet &subsets)
+        void DFAConstructor::EpsilonClosure(BitSet &bitset)
         {
-            assert(nfa->NodeCount() == q->ElemCount());
-            BitSet t(nfa->NodeCount());
+        }
+
+        const BitSet * DFAConstructor::ConstructStartBitSet()
+        {
+            BitSet q0(nfa_->NodeCount());
+            q0.Set(nfa_->GetStartNode()->index_);
+            EpsilonClosure(q0);
+            return subsets_.AddBitSet(q0).first;
+        }
+
+        std::pair<const BitSet *, bool> DFAConstructor::ConstructDelta(const BitSet *q,
+                                                                       const Edge *edge)
+        {
+            assert(nfa_->NodeCount() == q->ElemCount());
+            BitSet t(nfa_->NodeCount());
 
             auto count = q->ElemCount();
             for (std::size_t i = 0; i < count; ++i)
             {
                 if (q->IsSet(i))
                 {
-                    auto node1 = nfa->GetNode(i);
-                    auto node2 = nfa->Map(node1, edge);
+                    auto node1 = nfa_->GetNode(i);
+                    auto node2 = nfa_->Map(node1, edge);
                     if (node2)
                         t.Set(node2->index_);
                 }
             }
 
-            EpsilonClosure(nfa, t);
-            auto pair = subsets.AddBitSet(t);
+            EpsilonClosure(t);
+            auto pair = subsets_.AddBitSet(t);
 
             return std::make_pair(pair.first, !pair.second);
         }
 
-        void SubsetConstruction(const std::unique_ptr<NFA> &nfa)
+        void DFAConstructor::SubsetConstruction()
         {
             BitSetSet subsets;
-            auto q0 = ConstructStartBitSet(nfa, subsets);
+            auto q0 = ConstructStartBitSet();
 
             std::queue<const BitSet *> work_list;
             work_list.push(q0);
 
-            auto edge_iter_pair = nfa->GetEdgeIterators();
+            auto edge_iter_pair = nfa_->GetEdgeIterators();
 
             NodeMap<BitSet, Edge> node_map;
             while (!work_list.empty())
@@ -446,7 +479,7 @@ namespace regex
                 for (auto it = edge_iter_pair.first;
                      it != edge_iter_pair.second; ++it)
                 {
-                    auto pair = ConstructDelta(nfa, q, (*it).get(), subsets);
+                    auto pair = ConstructDelta(q, (*it).get());
                     node_map.Set(q, (*it).get(), pair.first);
 
                     if (pair.second)
