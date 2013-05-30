@@ -1,7 +1,7 @@
 #ifndef REGEX_AUTOMATA_H
 #define REGEX_AUTOMATA_H
 
-#include <functional>
+#include <cstdlib>
 
 namespace regex
 {
@@ -28,17 +28,19 @@ namespace regex
 
         struct Edge
         {
-            // Edge check function, return true
-            // when character belongs to the edge.
-            std::function<bool (int)> e_;
+            // Character range [first_, last_]
+            int first_;
+            int last_;
 
-            // Is edge epsilon or not
+            // Is epsilon edge or not
             bool is_epsilon_;
 
-            Edge() : is_epsilon_(true) { }
+            Edge() : first_(0), last_(0), is_epsilon_(true) { }
 
-            explicit Edge(const std::function<bool (int)> &e)
-                : e_(e), is_epsilon_(false) { }
+            Edge(int first, int last)
+                : first_(first), last_(last), is_epsilon_(false)
+            {
+            }
         };
     } // namespace automata
 } // namespace regex

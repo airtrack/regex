@@ -66,9 +66,14 @@ namespace regex
             typedef std::vector<std::unique_ptr<Edge>> EdgeList;
             typedef EdgeList::const_iterator EdgeIterator;
 
-            const Edge * AddEdge(const std::function<bool (int)> &e)
+            const Edge * AddEdge(int ch)
             {
-                auto edge = new Edge(e);
+                return AddEdge(ch, ch);
+            }
+
+            const Edge * AddEdge(int first, int last)
+            {
+                auto edge = new Edge(first, last);
                 edges_.push_back(std::unique_ptr<Edge>(edge));
                 return edge;
             }
@@ -177,7 +182,7 @@ namespace regex
         {
             auto node1 = nfa_->AddNode();
             auto node2 = nfa_->AddNode();
-            auto edge = nfa_->AddEdge([ast](int c) { return c == ast->c_; });
+            auto edge = nfa_->AddEdge(ast->c_);
             nfa_->SetMap(node1, edge, node2);
 
             FillData(data, node1, node2);
@@ -187,14 +192,7 @@ namespace regex
         {
             auto node1 = nfa_->AddNode();
             auto node2 = nfa_->AddNode();
-
-            std::function<bool (int)> f;
-            if (ast->first_ <= ast->last_)
-                f = [ast] (int c) { return c >= ast->first_ && c <= ast->last_; };
-            else
-                f = [ast] (int c) { return c == ast->first_ || c == ast->last_; };
-
-            auto edge = nfa_->AddEdge(f);
+            auto edge = nfa_->AddEdge(ast->first_, ast->last_);
             nfa_->SetMap(node1, edge, node2);
 
             FillData(data, node1, node2);
