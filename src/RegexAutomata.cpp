@@ -2,6 +2,7 @@
 #include "RegexParser.h"
 #include <vector>
 #include <queue>
+#include <set>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -12,6 +13,130 @@ namespace regex
     namespace automata
     {
         using namespace parser;
+
+        class IntervalSet
+        {
+        public:
+            struct Interval
+            {
+                int first_;
+                int last_;
+
+                Interval(int first, int last)
+                    : first_(first), last_(last)
+                {
+                    assert(first_ <= last_);
+                }
+
+                friend bool operator < (const Interval &left,
+                                        const Interval &right)
+                {
+                    // We assume left and right are equivalent when left is
+                    // right's subset or right is left's subset, so we return false.
+                    if (left.first_ >= right.first_ && left.last_ <= right.last_)
+                        return false;
+                    else if (right.first_ >= left.first_ && right.last_ <= left.last_)
+                        return false;
+                    else
+                        return left.last_ < right.first_;
+                }
+            };
+
+            typedef std::set<Interval> IntervalContainer;
+            typedef IntervalContainer::iterator Iterator;
+
+            IntervalSet() { }
+            IntervalSet(const IntervalSet &) = delete;
+            void operator = (const IntervalSet &) = delete;
+
+            std::pair<Iterator, Iterator> Search(const Interval &range) const
+            {
+                Interval first(range.first_, range.first_);
+                Interval last(range.last_, range.last_);
+                return std::make_pair(intervals_.lower_bound(first),
+                                      intervals_.upper_bound(last));
+            }
+
+            void Insert(const Interval &range)
+            {
+                int current = range.first_;
+                int last = range.last_;
+
+                while (current <= last)
+                {
+                    Interval cur(current, current);
+                    Iterator it = intervals_.lower_bound(cur);
+                    if (it == intervals_.end())
+                    {
+                        intervals_.insert(Interval(current, last));
+                        current = last + 1;
+                    }
+                    else
+                    {
+                        if (current < it->first_)
+                        {
+                            if (last < it->first_)
+                            {
+                                intervals_.insert(Interval(current, last));
+                                current = last + 1;
+                            }
+                            else
+                            {
+                                intervals_.insert(Interval(current, it->first_ - 1));
+                                current = it->first_;
+                            }
+                        }
+                        else if (current == it->first_)
+                        {
+                            if (last < it->last_)
+                            {
+                                int back_first = last + 1;
+                                int back_last = it->last_;
+                                intervals_.erase(it);
+                                intervals_.insert(Interval(current, last));
+                                intervals_.insert(Interval(back_first, back_last));
+                                current = last + 1;
+                            }
+                            else
+                            {
+                                current = it->last_ + 1;
+                            }
+                        }
+                        else
+                        {
+                            if (last < it->last_)
+                            {
+                                int front_first = it->first_;
+                                int front_last = current - 1;
+                                int middle_first = current;
+                                int middle_last = last;
+                                int back_first = last + 1;
+                                int back_last = it->last_;
+                                intervals_.erase(it);
+                                intervals_.insert(Interval(front_first, front_last));
+                                intervals_.insert(Interval(middle_first, middle_last));
+                                intervals_.insert(Interval(back_first, back_last));
+                                current = last + 1;
+                            }
+                            else
+                            {
+                                int front_first = it->first_;
+                                int front_last = current - 1;
+                                int back_first = current;
+                                int back_last = it->last_;
+                                intervals_.erase(it);
+                                intervals_.insert(Interval(front_first, front_last));
+                                intervals_.insert(Interval(back_first, back_last));
+                                current = back_last + 1;
+                            }
+                        }
+                    }
+                }
+            }
+
+        private:
+            IntervalContainer intervals_;
+        };
 
         // Template class to map (NodeType, EdgeType) to NodeType
         template<typename NodeType, typename EdgeType>
