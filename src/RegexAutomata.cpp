@@ -14,71 +14,78 @@ namespace regex
     {
         using namespace parser;
 
-        class IntervalSet
+        bool operator < (const Edge &left, const Edge &right)
+        {
+            // We assume left and right are equivalent when left is
+            // right's subset or right is left's subset, so we return false.
+            if (left.first_ >= right.first_ && left.last_ <= right.last_)
+                return false;
+            else if (right.first_ >= left.first_ && right.last_ <= left.last_)
+                return false;
+            else
+                return left.last_ < right.first_;
+        }
+
+        class EdgeSet
         {
         public:
-            struct Interval
+            typedef std::set<Edge> EdgeContainer;
+            typedef EdgeContainer::iterator Iterator;
+
+            EdgeSet() { }
+            EdgeSet(const EdgeSet &) = delete;
+            void operator = (const EdgeSet &) = delete;
+
+            Iterator Begin() const
             {
-                int first_;
-                int last_;
+                return edges_.begin();
+            }
 
-                Interval(int first, int last)
-                    : first_(first), last_(last)
-                {
-                    assert(first_ <= last_);
-                }
-
-                friend bool operator < (const Interval &left,
-                                        const Interval &right)
-                {
-                    // We assume left and right are equivalent when left is
-                    // right's subset or right is left's subset, so we return false.
-                    if (left.first_ >= right.first_ && left.last_ <= right.last_)
-                        return false;
-                    else if (right.first_ >= left.first_ && right.last_ <= left.last_)
-                        return false;
-                    else
-                        return left.last_ < right.first_;
-                }
-            };
-
-            typedef std::set<Interval> IntervalContainer;
-            typedef IntervalContainer::iterator Iterator;
-
-            IntervalSet() { }
-            IntervalSet(const IntervalSet &) = delete;
-            void operator = (const IntervalSet &) = delete;
-
-            std::pair<Iterator, Iterator> Search(const Interval &range) const
+            Iterator End() const
             {
-                Interval first(range.first_, range.first_);
-                Interval last(range.last_, range.last_);
-                return std::make_pair(intervals_.lower_bound(first),
-                                      intervals_.upper_bound(last));
+                return edges_.end();
+            }
+
+            std::pair<Iterator, Iterator> Search(int c) const
+            {
+                return Search(c, c);
+            }
+
+            std::pair<Iterator, Iterator> Search(int first, int last) const
+            {
+                return Search(Edge(first, last));
+            }
+
+            std::pair<Iterator, Iterator> Search(const Edge &range) const
+            {
+                Edge first(range.first_, range.first_);
+                Edge last(range.last_, range.last_);
+                return std::make_pair(edges_.lower_bound(first),
+                                      edges_.upper_bound(last));
             }
 
             void Insert(int c)
             {
-                Insert(Interval(c, c));
+                Insert(Edge(c, c));
             }
 
             void Insert(int first, int last)
             {
-                Insert(Interval(first, last));
+                Insert(Edge(first, last));
             }
 
-            void Insert(const Interval &range)
+            void Insert(const Edge &range)
             {
                 int current = range.first_;
                 int last = range.last_;
 
                 while (current <= last)
                 {
-                    Interval cur(current, current);
-                    Iterator it = intervals_.lower_bound(cur);
-                    if (it == intervals_.end())
+                    Edge cur(current, current);
+                    Iterator it = edges_.lower_bound(cur);
+                    if (it == edges_.end())
                     {
-                        intervals_.insert(Interval(current, last));
+                        edges_.insert(Edge(current, last));
                         current = last + 1;
                     }
                     else
@@ -87,12 +94,12 @@ namespace regex
                         {
                             if (last < it->first_)
                             {
-                                intervals_.insert(Interval(current, last));
+                                edges_.insert(Edge(current, last));
                                 current = last + 1;
                             }
                             else
                             {
-                                intervals_.insert(Interval(current, it->first_ - 1));
+                                edges_.insert(Edge(current, it->first_ - 1));
                                 current = it->first_;
                             }
                         }
@@ -102,9 +109,9 @@ namespace regex
                             {
                                 int back_first = last + 1;
                                 int back_last = it->last_;
-                                intervals_.erase(it);
-                                intervals_.insert(Interval(current, last));
-                                intervals_.insert(Interval(back_first, back_last));
+                                edges_.erase(it);
+                                edges_.insert(Edge(current, last));
+                                edges_.insert(Edge(back_first, back_last));
                                 current = last + 1;
                             }
                             else
@@ -122,10 +129,10 @@ namespace regex
                                 int middle_last = last;
                                 int back_first = last + 1;
                                 int back_last = it->last_;
-                                intervals_.erase(it);
-                                intervals_.insert(Interval(front_first, front_last));
-                                intervals_.insert(Interval(middle_first, middle_last));
-                                intervals_.insert(Interval(back_first, back_last));
+                                edges_.erase(it);
+                                edges_.insert(Edge(front_first, front_last));
+                                edges_.insert(Edge(middle_first, middle_last));
+                                edges_.insert(Edge(back_first, back_last));
                                 current = last + 1;
                             }
                             else
@@ -134,9 +141,9 @@ namespace regex
                                 int front_last = current - 1;
                                 int back_first = current;
                                 int back_last = it->last_;
-                                intervals_.erase(it);
-                                intervals_.insert(Interval(front_first, front_last));
-                                intervals_.insert(Interval(back_first, back_last));
+                                edges_.erase(it);
+                                edges_.insert(Edge(front_first, front_last));
+                                edges_.insert(Edge(back_first, back_last));
                                 current = back_last + 1;
                             }
                         }
@@ -145,20 +152,20 @@ namespace regex
             }
 
         private:
-            IntervalContainer intervals_;
+            EdgeContainer edges_;
         };
 
-        // Visitor class construct char set from AST
-        class CharSetConstructorVisitor : public Visitor
+        // Visitor class construct edge set from AST
+        class EdgeSetConstructorVisitor : public Visitor
         {
         public:
-            explicit CharSetConstructorVisitor(IntervalSet *char_set)
-                : char_set_(char_set)
+            explicit EdgeSetConstructorVisitor(EdgeSet *edge_set)
+                : edge_set_(edge_set)
             {
             }
 
-            CharSetConstructorVisitor(const CharSetConstructorVisitor &) = delete;
-            void operator = (const CharSetConstructorVisitor &) = delete;
+            EdgeSetConstructorVisitor(const EdgeSetConstructorVisitor &) = delete;
+            void operator = (const EdgeSetConstructorVisitor &) = delete;
 
             VISIT_NODE(CharNode);
             VISIT_NODE(CharRangeNode);
@@ -167,17 +174,17 @@ namespace regex
             VISIT_NODE(ClosureNode) { }
 
         private:
-            IntervalSet *char_set_;
+            EdgeSet *edge_set_;
         };
 
-        void CharSetConstructorVisitor::Visit(CharNode *ast, void *data)
+        void EdgeSetConstructorVisitor::Visit(CharNode *ast, void *data)
         {
-            char_set_->Insert(ast->c_);
+            edge_set_->Insert(ast->c_);
         }
 
-        void CharSetConstructorVisitor::Visit(CharRangeNode *ast, void *data)
+        void EdgeSetConstructorVisitor::Visit(CharRangeNode *ast, void *data)
         {
-            char_set_->Insert(ast->first_, ast->last_);
+            edge_set_->Insert(ast->first_, ast->last_);
         }
 
         // Template class to map (NodeType, EdgeType) to NodeType
@@ -225,33 +232,16 @@ namespace regex
         class NFA
         {
         public:
-            NFA() : start_(nullptr), accept_(nullptr) { }
+            explicit NFA(std::unique_ptr<EdgeSet> edge_set)
+                : edge_set_(std::move(edge_set)), start_(nullptr), accept_(nullptr)
+            {
+            }
+
             NFA(const NFA &) = delete;
             void operator = (const NFA &) = delete;
 
             typedef std::vector<std::unique_ptr<Node>> NodeList;
-            typedef std::vector<std::unique_ptr<Edge>> EdgeList;
-            typedef EdgeList::const_iterator EdgeIterator;
-
-            const Edge * AddEdge(int ch)
-            {
-                return AddEdge(ch, ch);
-            }
-
-            const Edge * AddEdge(int first, int last)
-            {
-                auto edge = new Edge(first, last);
-                edges_.push_back(std::unique_ptr<Edge>(edge));
-                return edge;
-            }
-
-            const Node * AddNode(Node::Type t = Node::Type_Normal)
-            {
-                auto index = nodes_.size();
-                auto node = new Node(index, t);
-                nodes_.push_back(std::unique_ptr<Node>(node));
-                return node;
-            }
+            typedef EdgeSet::Iterator EdgeIterator;
 
             void SetMap(const Node *node1, const Edge *edge, const Node *node2)
             {
@@ -263,9 +253,12 @@ namespace regex
                 return node_map_.Map(node, edge);
             }
 
-            const Edge * GetEpsilon() const
+            const Node * AddNode(Node::Type t = Node::Type_Normal)
             {
-                return &epsilon_;
+                auto index = nodes_.size();
+                auto node = new Node(index, t);
+                nodes_.push_back(std::unique_ptr<Node>(node));
+                return node;
             }
 
             void SetStartNode(const Node *node)
@@ -295,12 +288,6 @@ namespace regex
                 return nodes_.size();
             }
 
-            // Get edge begin and end iterator pair
-            std::pair<EdgeIterator, EdgeIterator> GetEdgeIterators() const
-            {
-                return std::make_pair(edges_.begin(), edges_.end());
-            }
-
             // Get node by index
             const Node * GetNode(std::size_t index) const
             {
@@ -310,12 +297,40 @@ namespace regex
                     return nullptr;
             }
 
-        private:
-            EdgeList edges_;
-            NodeList nodes_;
-            NodeMap<Node, Edge> node_map_;
-            Edge epsilon_;
+            // Get epsilon edge
+            const Edge * GetEpsilon() const
+            {
+                return &epsilon_;
+            }
 
+            // Get edge iterator range
+            std::pair<EdgeIterator, EdgeIterator> SearchEdge(int c) const
+            {
+                return edge_set_->Search(c);
+            }
+
+            std::pair<EdgeIterator, EdgeIterator> SearchEdge(int first, int last) const
+            {
+                return edge_set_->Search(first, last);
+            }
+
+            // Get all edges begin and end iterator pair without epsilon edge
+            std::pair<EdgeIterator, EdgeIterator> GetEdgeIterators() const
+            {
+                return std::make_pair(edge_set_->Begin(), edge_set_->End());
+            }
+
+        private:
+            // All NFA nodes
+            NodeList nodes_;
+            // Epsilon edge
+            Edge epsilon_;
+            // Non-epsilon edges
+            std::unique_ptr<EdgeSet> edge_set_;
+            // Node-Edge map
+            NodeMap<Node, Edge> node_map_;
+
+            // Start and accept node
             const Node *start_;
             const Node *accept_;
         };
@@ -352,8 +367,12 @@ namespace regex
         {
             auto node1 = nfa_->AddNode();
             auto node2 = nfa_->AddNode();
-            auto edge = nfa_->AddEdge(ast->c_);
-            nfa_->SetMap(node1, edge, node2);
+
+            auto edges = nfa_->SearchEdge(ast->c_);
+            for (; edges.first != edges.second; ++edges.first)
+            {
+                nfa_->SetMap(node1, &(*edges.first), node2);
+            }
 
             FillData(data, node1, node2);
         }
@@ -362,8 +381,12 @@ namespace regex
         {
             auto node1 = nfa_->AddNode();
             auto node2 = nfa_->AddNode();
-            auto edge = nfa_->AddEdge(ast->first_, ast->last_);
-            nfa_->SetMap(node1, edge, node2);
+
+            auto edges = nfa_->SearchEdge(ast->first_, ast->last_);
+            for (; edges.first != edges.second; ++edges.first)
+            {
+                nfa_->SetMap(node1, &(*edges.first), node2);
+            }
 
             FillData(data, node1, node2);
         }
@@ -432,7 +455,14 @@ namespace regex
 
         std::unique_ptr<NFA> ConvertASTToNFA(const std::unique_ptr<ASTNode> &ast)
         {
-            std::unique_ptr<NFA> nfa(new NFA);
+            // Construct EdgeSet
+            std::unique_ptr<EdgeSet> edge_set(new EdgeSet);
+
+            EdgeSetConstructorVisitor edge_set_visitor(edge_set.get());
+            ast->Accept(&edge_set_visitor, nullptr);
+
+            // Construct NFA
+            std::unique_ptr<NFA> nfa(new NFA(std::move(edge_set)));
 
             NFAConverterVisitor visitor(nfa.get());
             NFAConverterVisitor::DataType pair;
@@ -647,8 +677,8 @@ namespace regex
                 for (auto it = edge_iter_pair.first;
                      it != edge_iter_pair.second; ++it)
                 {
-                    auto pair = ConstructDelta(q, (*it).get());
-                    node_map.Set(q, (*it).get(), pair.first);
+                    auto pair = ConstructDelta(q, &(*it));
+                    node_map.Set(q, &(*it), pair.first);
 
                     if (pair.second)
                         work_list.push(pair.first);
