@@ -57,6 +57,16 @@ namespace regex
                                       intervals_.upper_bound(last));
             }
 
+            void Insert(int c)
+            {
+                Insert(Interval(c, c));
+            }
+
+            void Insert(int first, int last)
+            {
+                Insert(Interval(first, last));
+            }
+
             void Insert(const Interval &range)
             {
                 int current = range.first_;
@@ -137,6 +147,38 @@ namespace regex
         private:
             IntervalContainer intervals_;
         };
+
+        // Visitor class construct char set from AST
+        class CharSetConstructorVisitor : public Visitor
+        {
+        public:
+            explicit CharSetConstructorVisitor(IntervalSet *char_set)
+                : char_set_(char_set)
+            {
+            }
+
+            CharSetConstructorVisitor(const CharSetConstructorVisitor &) = delete;
+            void operator = (const CharSetConstructorVisitor &) = delete;
+
+            VISIT_NODE(CharNode);
+            VISIT_NODE(CharRangeNode);
+            VISIT_NODE(ConcatenationNode) { }
+            VISIT_NODE(AlternationNode) { }
+            VISIT_NODE(ClosureNode) { }
+
+        private:
+            IntervalSet *char_set_;
+        };
+
+        void CharSetConstructorVisitor::Visit(CharNode *ast, void *data)
+        {
+            char_set_->Insert(ast->c_);
+        }
+
+        void CharSetConstructorVisitor::Visit(CharRangeNode *ast, void *data)
+        {
+            char_set_->Insert(ast->first_, ast->last_);
+        }
 
         // Template class to map (NodeType, EdgeType) to NodeType
         template<typename NodeType, typename EdgeType>
@@ -285,6 +327,9 @@ namespace regex
             typedef std::pair<const Node *, const Node *> DataType;
 
             explicit NFAConverterVisitor(NFA *nfa) : nfa_(nfa) { }
+
+            NFAConverterVisitor(const NFAConverterVisitor &) = delete;
+            void operator = (const NFAConverterVisitor &) = delete;
 
             VISIT_NODE(CharNode);
             VISIT_NODE(CharRangeNode);
