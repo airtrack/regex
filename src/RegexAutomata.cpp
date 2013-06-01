@@ -4,6 +4,7 @@
 #include <queue>
 #include <set>
 #include <memory>
+#include <limits>
 #include <unordered_map>
 #include <unordered_set>
 #include <assert.h>
@@ -192,6 +193,20 @@ namespace regex
         class NodeMap
         {
         public:
+            struct NodeEdgeHash
+            {
+                std::size_t operator () (const std::pair<const NodeType *,
+                                         const EdgeType *> &pair) const
+                {
+                    return std::hash<const NodeType *>()(pair.first) *
+                    std::hash<const EdgeType *>()(pair.second);
+                }
+            };
+
+            typedef std::unordered_multimap<std::pair<const NodeType *, const EdgeType *>,
+                                            const NodeType *, NodeEdgeHash> NodeEdgeMap;
+            typedef typename NodeEdgeMap::const_iterator Iterator;
+
             NodeMap() { }
             NodeMap(const NodeMap &) = delete;
             void operator = (const NodeMap &) = delete;
@@ -214,19 +229,14 @@ namespace regex
                 map_.insert(std::make_pair(key, node2));
             }
 
-        private:
-            struct NodeEdgeHash
+            std::pair<Iterator, Iterator> EqualRange(const NodeType *node,
+                                                     const EdgeType *edge) const
             {
-                std::size_t operator () (const std::pair<const NodeType *,
-                                                         const EdgeType *> &pair) const
-                {
-                    return std::hash<const NodeType *>()(pair.first) *
-                           std::hash<const EdgeType *>()(pair.second);
-                }
-            };
+                return map_.equal_range(std::make_pair(node, edge));
+            }
 
-            std::unordered_multimap<std::pair<const NodeType *, const EdgeType *>,
-                                    const NodeType *, NodeEdgeHash> map_;
+        private:
+            NodeEdgeMap map_;
         };
 
         class NFA
@@ -251,6 +261,12 @@ namespace regex
             const Node * Map(const Node *node, const Edge *edge)
             {
                 return node_map_.Map(node, edge);
+            }
+
+            auto MapEqualRange(const Node *node, const Edge *edge)
+                -> decltype(NodeMap<Node, Edge>().EqualRange(nullptr, nullptr)) const
+            {
+                return node_map_.EqualRange(node, edge);
             }
 
             const Node * AddNode(Node::Type t = Node::Type_Normal)
@@ -481,6 +497,10 @@ namespace regex
         public:
             explicit BitSet(std::size_t elem_count);
 
+            // Merge other to itself, return true when
+            // merge change itself.
+            bool MergeFrom(const BitSet &other);
+
             // Set has index element
             void Set(std::size_t index);
 
@@ -518,6 +538,23 @@ namespace regex
             : elem_count_(elem_count),
               bits_(GetIntCount(elem_count))
         {
+        }
+
+        bool BitSet::MergeFrom(const BitSet &other)
+        {
+            assert(elem_count_ == other.elem_count_);
+
+            bool changed = false;
+            std::size_t count = bits_.size();
+            for (std::size_t i = 0; i < count; ++i)
+            {
+                auto &self = bits_[i];
+                auto old = self;
+                self |= other.bits_[i];
+                changed = self != old;
+            }
+
+            return changed;
         }
 
         void BitSet::Set(std::size_t index)
@@ -594,8 +631,8 @@ namespace regex
             // Construct epsilon closure
             void ConstructEpsilonClosure();
 
-            // Epsilon closure the bitset
-            void EpsilonClosure(BitSet &bitset);
+            // Epsilon closure the bitset from node
+            void EpsilonClosure(BitSet &bitset, const Node *node);
 
             // Subset construct start BitSet from NFA
             const BitSet * ConstructStartBitSet();
@@ -611,34 +648,79 @@ namespace regex
 
             std::unique_ptr<NFA> nfa_;
             BitSetSet subsets_;
+
+            std::vector<std::unique_ptr<BitSet>> epsilon_extend_;
         };
 
         DFAConstructor::DFAConstructor(std::unique_ptr<NFA> nfa)
             : nfa_(std::move(nfa))
         {
+            ConstructEpsilonClosure();
         }
 
         void DFAConstructor::ConstructEpsilonClosure()
         {
+            std::queue<const Node *> work_list;
+            std::set<std::pair<const Node *, const Node *>> pre_epsilon_node;
+            const Node *min_ptr = std::numeric_limits<const Node *>::min();
+            const Node *max_ptr = std::numeric_limits<const Node *>::max();
+
+            std::size_t node_count = nfa_->NodeCount();
+            for (std::size_t i = 0; i < node_count; ++i)
+            {
+                auto node = nfa_->GetNode(i);
+                work_list.push(node);
+
+                auto bitset = new BitSet(node_count);
+                bitset->Set(i);
+                epsilon_extend_.push_back(std::unique_ptr<BitSet>(bitset));
+            }
+
+            while (!work_list.empty())
+            {
+                auto node = work_list.front();
+                work_list.pop();
+
+                bool changed = false;
+                auto &bitset = epsilon_extend_[node->index_];
+
+                auto range = nfa_->MapEqualRange(node, nfa_->GetEpsilon());
+                for (; range.first != range.second; ++range.first)
+                {
+                    auto next_node = range.first->second;
+                    pre_epsilon_node.insert(std::make_pair(next_node, node));
+
+                    if (bitset->MergeFrom(*epsilon_extend_[next_node->index_]))
+                        changed = true;
+                }
+
+                if (changed)
+                {
+                    auto it = pre_epsilon_node.lower_bound(std::make_pair(node, min_ptr));
+                    auto end = pre_epsilon_node.upper_bound(std::make_pair(node, max_ptr));
+
+                    for (; it != end; ++it)
+                        work_list.push(it->second);
+                }
+            }
         }
 
-        void DFAConstructor::EpsilonClosure(BitSet &bitset)
+        void DFAConstructor::EpsilonClosure(BitSet &bitset, const Node *node)
         {
+            bitset.MergeFrom(*epsilon_extend_[node->index_]);
         }
 
         const BitSet * DFAConstructor::ConstructStartBitSet()
         {
-            BitSet q0(nfa_->NodeCount());
-            q0.Set(nfa_->GetStartNode()->index_);
-            EpsilonClosure(q0);
-            return subsets_.AddBitSet(q0).first;
+            auto start_index = nfa_->GetStartNode()->index_;
+            return subsets_.AddBitSet(*epsilon_extend_[start_index]).first;
         }
 
         std::pair<const BitSet *, bool> DFAConstructor::ConstructDelta(const BitSet *q,
                                                                        const Edge *edge)
         {
             assert(nfa_->NodeCount() == q->ElemCount());
-            BitSet t(nfa_->NodeCount());
+            BitSet bitset(nfa_->NodeCount());
 
             auto count = q->ElemCount();
             for (std::size_t i = 0; i < count; ++i)
@@ -648,12 +730,11 @@ namespace regex
                     auto node1 = nfa_->GetNode(i);
                     auto node2 = nfa_->Map(node1, edge);
                     if (node2)
-                        t.Set(node2->index_);
+                        EpsilonClosure(bitset, node2);
                 }
             }
 
-            EpsilonClosure(t);
-            auto pair = subsets_.AddBitSet(t);
+            auto pair = subsets_.AddBitSet(bitset);
 
             return std::make_pair(pair.first, !pair.second);
         }
