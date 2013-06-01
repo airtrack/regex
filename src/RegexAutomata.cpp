@@ -493,7 +493,7 @@ namespace regex
         // Bit set for subset construction
         class BitSet
         {
-            friend struct BitSetHash;
+            friend struct BitSetPtrHash;
         public:
             explicit BitSet(std::size_t elem_count);
 
@@ -583,17 +583,27 @@ namespace regex
                   (elem_count % kUnsignedIntBits == 0 ? 0 : 1);
         }
 
-        struct BitSetHash
+        struct BitSetPtrHash
         {
-            std::size_t operator () (const BitSet &bitset) const
+            std::size_t operator () (const std::unique_ptr<BitSet> &bitset) const
             {
                 std::hash<unsigned int> h;
 
                 std::size_t result = 1;
-                for (auto it = bitset.bits_.begin(); it != bitset.bits_.end(); ++it)
+                for (auto it = bitset->bits_.begin();
+                     it != bitset->bits_.end(); ++it)
                     result *= h(*it);
 
                 return result;
+            }
+        };
+
+        struct BitSetPtrEqual
+        {
+            bool operator () (const std::unique_ptr<BitSet> &left,
+                              const std::unique_ptr<BitSet> &right) const
+            {
+                return *left == *right;
             }
         };
 
@@ -610,12 +620,14 @@ namespace regex
             // BitSetSet and the bitset is existed or not
             std::pair<const BitSet *, bool> AddBitSet(const BitSet &bitset)
             {
-                auto pair = bitsets_.insert(bitset);
-                return std::make_pair(&(*pair.first), !pair.second);
+                auto p = new BitSet(bitset);
+                auto pair = bitsets_.insert(std::unique_ptr<BitSet>(p));
+                return std::make_pair(pair.first->get(), !pair.second);
             }
 
         private:
-            std::unordered_set<BitSet, BitSetHash> bitsets_;
+            std::unordered_set<std::unique_ptr<BitSet>,
+                               BitSetPtrHash, BitSetPtrEqual> bitsets_;
         };
 
         // Construct DFA from NFA
@@ -741,7 +753,6 @@ namespace regex
 
         void DFAConstructor::SubsetConstruction()
         {
-            BitSetSet subsets;
             auto q0 = ConstructStartBitSet();
 
             std::queue<const BitSet *> work_list;
