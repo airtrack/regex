@@ -208,6 +208,10 @@ namespace regex
             typedef typename NodeEdgeMap::const_iterator Iterator;
 
             NodeMap() { }
+
+            NodeMap(NodeMap &&) = default;
+            NodeMap& operator = (NodeMap &&) = default;
+
             NodeMap(const NodeMap &) = delete;
             void operator = (const NodeMap &) = delete;
 
@@ -235,6 +239,16 @@ namespace regex
                 return map_.equal_range(std::make_pair(node, edge));
             }
 
+            Iterator Begin() const
+            {
+                return map_.begin();
+            }
+
+            Iterator End() const
+            {
+                return map_.end();
+            }
+
         private:
             NodeEdgeMap map_;
         };
@@ -242,8 +256,8 @@ namespace regex
         class NFA
         {
         public:
-            explicit NFA(std::unique_ptr<EdgeSet> edge_set)
-                : edge_set_(std::move(edge_set)), start_(nullptr), accept_(nullptr)
+            explicit NFA(const std::shared_ptr<EdgeSet> &edge_set)
+                : edge_set_(edge_set), start_(nullptr), accept_(nullptr)
             {
             }
 
@@ -336,13 +350,18 @@ namespace regex
                 return std::make_pair(edge_set_->Begin(), edge_set_->End());
             }
 
+            std::shared_ptr<EdgeSet> GetEdgeSet() const
+            {
+                return edge_set_;
+            }
+
         private:
             // All NFA nodes
             NodeList nodes_;
             // Epsilon edge
             Edge epsilon_;
             // Non-epsilon edges
-            std::unique_ptr<EdgeSet> edge_set_;
+            std::shared_ptr<EdgeSet> edge_set_;
             // Node-Edge map
             NodeMap<Node, Edge> node_map_;
 
@@ -472,13 +491,13 @@ namespace regex
         std::unique_ptr<NFA> ConvertASTToNFA(const std::unique_ptr<ASTNode> &ast)
         {
             // Construct EdgeSet
-            std::unique_ptr<EdgeSet> edge_set(new EdgeSet);
+            std::shared_ptr<EdgeSet> edge_set(new EdgeSet);
 
             EdgeSetConstructorVisitor edge_set_visitor(edge_set.get());
             ast->Accept(&edge_set_visitor, nullptr);
 
             // Construct NFA
-            std::unique_ptr<NFA> nfa(new NFA(std::move(edge_set)));
+            std::unique_ptr<NFA> nfa(new NFA(edge_set));
 
             NFAConverterVisitor visitor(nfa.get());
             NFAConverterVisitor::DataType pair;
@@ -611,6 +630,10 @@ namespace regex
         class BitSetSet
         {
         public:
+            typedef std::unordered_set<std::unique_ptr<BitSet>,
+                                       BitSetPtrHash, BitSetPtrEqual> SetType;
+            typedef SetType::const_iterator Iterator;
+
             BitSetSet() { }
 
             BitSetSet(const BitSetSet &) = delete;
@@ -625,9 +648,35 @@ namespace regex
                 return std::make_pair(pair.first->get(), !pair.second);
             }
 
+            Iterator Begin() const
+            {
+                return bitsets_.begin();
+            }
+
+            Iterator End() const
+            {
+                return bitsets_.end();
+            }
+
         private:
-            std::unordered_set<std::unique_ptr<BitSet>,
-                               BitSetPtrHash, BitSetPtrEqual> bitsets_;
+            SetType bitsets_;
+        };
+
+        class DFA
+        {
+        public:
+            DFA(std::vector<std::unique_ptr<Node>> &&nodes,
+                NodeMap<Node, Edge> &&node_map,
+                const std::shared_ptr<EdgeSet> &edge_set)
+                : edge_set_(edge_set)
+            {
+            }
+
+            DFA(const DFA &) = delete;
+            void operator = (const DFA &) = delete;
+
+        private:
+            std::shared_ptr<EdgeSet> edge_set_;
         };
 
         // Construct DFA from NFA
@@ -638,6 +687,8 @@ namespace regex
 
             DFAConstructor(const DFAConstructor &) = delete;
             void operator = (const DFAConstructor &) = delete;
+
+            std::unique_ptr<DFA> ConstructDFA() const;
 
         private:
             // Construct epsilon closure
@@ -660,6 +711,7 @@ namespace regex
 
             std::unique_ptr<NFA> nfa_;
             BitSetSet subsets_;
+            NodeMap<BitSet, Edge> node_map_;
 
             std::vector<std::unique_ptr<BitSet>> epsilon_extend_;
         };
@@ -668,6 +720,47 @@ namespace regex
             : nfa_(std::move(nfa))
         {
             ConstructEpsilonClosure();
+            SubsetConstruction();
+        }
+
+        std::unique_ptr<DFA> DFAConstructor::ConstructDFA() const
+        {
+            NodeMap<Node, Edge> dfa_node_map;
+            std::vector<std::unique_ptr<Node>> dfa_nodes;
+            std::unordered_map<const BitSet *, const Node *> bitset_node_map;
+
+            // Construct all DFA nodes
+            auto nfa_start = nfa_->GetStartNode();
+            auto nfa_accept = nfa_->GetAcceptNode();
+            for (auto it = subsets_.Begin(); it != subsets_.End(); ++it)
+            {
+                auto index = dfa_nodes.size();
+                Node::Type type = Node::Type_Normal;
+
+                if ((*it)->IsSet(nfa_start->index_))
+                    type = Node::Type_Start;
+                else if ((*it)->IsSet(nfa_accept->index_))
+                    type = Node::Type_Accept;
+
+                std::unique_ptr<Node> n(new Node(index, type));
+                bitset_node_map[it->get()] = n.get();
+                dfa_nodes.push_back(std::move(n));
+            }
+
+            // Transform BitSet-Edge map to DFA's Node-Edge map
+            for (auto it = node_map_.Begin(); it != node_map_.End(); ++it)
+            {
+                auto bitset1 = it->first.first;
+                auto bitset2 = it->second;
+                auto edge = it->first.second;
+                auto dfa_node1 = bitset_node_map[bitset1];
+                auto dfa_node2 = bitset_node_map[bitset2];
+                dfa_node_map.Set(dfa_node1, edge, dfa_node2);
+            }
+
+            return std::unique_ptr<DFA>(new DFA(std::move(dfa_nodes),
+                                                std::move(dfa_node_map),
+                                                nfa_->GetEdgeSet()));
         }
 
         void DFAConstructor::ConstructEpsilonClosure()
@@ -760,7 +853,6 @@ namespace regex
 
             auto edge_iter_pair = nfa_->GetEdgeIterators();
 
-            NodeMap<BitSet, Edge> node_map;
             while (!work_list.empty())
             {
                 auto q = work_list.front();
@@ -770,12 +862,20 @@ namespace regex
                      it != edge_iter_pair.second; ++it)
                 {
                     auto pair = ConstructDelta(q, &(*it));
-                    node_map.Set(q, &(*it), pair.first);
+                    node_map_.Set(q, &(*it), pair.first);
 
                     if (pair.second)
                         work_list.push(pair.first);
                 }
             }
+        }
+
+        void ConstructStateMachine(const std::string &re)
+        {
+            auto ast = Parse(re);
+            auto nfa = ConvertASTToNFA(std::move(ast));
+            DFAConstructor dfa_constructor(std::move(nfa));
+            auto dfa = dfa_constructor.ConstructDFA();
         }
     } // namespace automata
 } // namespace regex

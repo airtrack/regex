@@ -1,7 +1,7 @@
 #ifndef REGEX_AUTOMATA_H
 #define REGEX_AUTOMATA_H
 
-#include <cstdlib>
+#include <string>
 
 namespace regex
 {
@@ -42,6 +42,8 @@ namespace regex
             {
             }
         };
+
+        void ConstructStateMachine(const std::string &re);
     } // namespace automata
 } // namespace regex
 
