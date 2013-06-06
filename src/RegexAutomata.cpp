@@ -1,6 +1,7 @@
 #include "RegexAutomata.h"
 #include "RegexParser.h"
 #include <vector>
+#include <list>
 #include <queue>
 #include <set>
 #include <memory>
@@ -582,7 +583,7 @@ namespace regex
             std::size_t bit_index = index % kUnsignedIntBits;
 
             if (unsigned_int_index < bits_.size())
-                bits_[unsigned_int_index] |= 0x1 >> bit_index;
+                bits_[unsigned_int_index] |= 0x1 << bit_index;
         }
 
         bool BitSet::IsSet(std::size_t index) const
@@ -591,7 +592,7 @@ namespace regex
             std::size_t bit_index = index % kUnsignedIntBits;
 
             if (unsigned_int_index < bits_.size())
-                return (bits_[unsigned_int_index] & (0x1 >> bit_index)) != 0;
+                return (bits_[unsigned_int_index] & (0x1 << bit_index)) != 0;
             else
                 return false;
         }
@@ -667,17 +668,71 @@ namespace regex
         public:
             DFA(std::vector<std::unique_ptr<Node>> &&nodes,
                 NodeMap<Node, Edge> &&node_map,
-                const std::shared_ptr<EdgeSet> &edge_set)
-                : edge_set_(edge_set)
-            {
-            }
+                const std::shared_ptr<EdgeSet> &edge_set);
 
             DFA(const DFA &) = delete;
             void operator = (const DFA &) = delete;
 
         private:
+            typedef std::list<const Node *> NodeList;
+            typedef std::vector<std::unique_ptr<NodeList>> NodeListSet;
+            typedef NodeMap<NodeList, Edge> NodeListEdgeMap;
+
+            void Minimization(const std::vector<std::unique_ptr<Node>> &nodes,
+                              const NodeMap<Node, Edge> &node_map,
+                              NodeListSet &node_list_set,
+                              NodeListEdgeMap &node_list_map);
+
+            void DoMinimization(const NodeMap<Node, Edge> &node_map,
+                                NodeListSet &node_list_set,
+                                NodeListEdgeMap &node_list_map);
+
+            // Minimum nodes
+            std::vector<std::unique_ptr<Node>> nodes_;
+            // All edges
             std::shared_ptr<EdgeSet> edge_set_;
+            // Node to Edge map
+            NodeMap<Node, Edge> node_map_;
         };
+
+        DFA::DFA(std::vector<std::unique_ptr<Node>> &&nodes,
+                 NodeMap<Node, Edge> &&node_map,
+                 const std::shared_ptr<EdgeSet> &edge_set)
+            : edge_set_(edge_set)
+        {
+            auto ns = std::move(nodes);
+            auto nm = std::move(node_map);
+            NodeListSet node_list_set;
+            NodeListEdgeMap node_list_map;
+            Minimization(ns, nm, node_list_set, node_list_map);
+        }
+
+        void DFA::Minimization(const std::vector<std::unique_ptr<Node>> &nodes,
+                               const NodeMap<Node, Edge> &node_map,
+                               NodeListSet &node_list_set,
+                               NodeListEdgeMap &node_list_map)
+        {
+            std::unique_ptr<NodeList> accept_node_list(new NodeList);
+            std::unique_ptr<NodeList> not_accept_node_list(new NodeList);
+
+            for (auto &n : nodes)
+            {
+                if (n->type_ == Node::Type_Accept)
+                    accept_node_list->push_back(n.get());
+                else
+                    not_accept_node_list->push_back(n.get());
+            }
+
+            node_list_set.push_back(std::move(accept_node_list));
+            node_list_set.push_back(std::move(not_accept_node_list));
+            DoMinimization(node_map, node_list_set, node_list_map);
+        }
+
+        void DFA::DoMinimization(const NodeMap<Node, Edge> &node_map,
+                                 NodeListSet &node_list_set,
+                                 NodeListEdgeMap &node_list_map)
+        {
+        }
 
         // Construct DFA from NFA
         class DFAConstructor
