@@ -200,7 +200,7 @@ namespace regex
                                          const EdgeType *> &pair) const
                 {
                     return std::hash<const NodeType *>()(pair.first) *
-                    std::hash<const EdgeType *>()(pair.second);
+                           std::hash<const EdgeType *>()(pair.second);
                 }
             };
 
@@ -217,7 +217,7 @@ namespace regex
             void operator = (const NodeMap &) = delete;
 
             // Get first node-edge mapped node
-            const NodeType * Map(const NodeType *node, const EdgeType *edge)
+            const NodeType * Map(const NodeType *node, const EdgeType *edge) const
             {
                 auto key = std::make_pair(node, edge);
                 auto it = map_.find(key);
@@ -677,61 +677,139 @@ namespace regex
             typedef std::list<const Node *> NodeList;
             typedef std::vector<std::unique_ptr<NodeList>> NodeListSet;
             typedef NodeMap<NodeList, Edge> NodeListEdgeMap;
+            typedef std::unordered_map<const Node *, NodeList *> NodeOwnerMap;
 
-            void Minimization(const std::vector<std::unique_ptr<Node>> &nodes,
-                              const NodeMap<Node, Edge> &node_map,
-                              NodeListSet &node_list_set,
-                              NodeListEdgeMap &node_list_map);
+            void Minimization();
+            void DoMinimization(NodeOwnerMap &node_owner_map);
+            void SplitAll(NodeOwnerMap &node_owner_map);
+            void Split(NodeList &node_list,
+                       NodeOwnerMap &node_owner_map);
 
-            void DoMinimization(const NodeMap<Node, Edge> &node_map,
-                                NodeListSet &node_list_set,
-                                NodeListEdgeMap &node_list_map);
-
-            // Minimum nodes
-            std::vector<std::unique_ptr<Node>> nodes_;
             // All edges
             std::shared_ptr<EdgeSet> edge_set_;
-            // Node to Edge map
+
+            // Not minimization DFA's nodes and node-edge map
+            std::vector<std::unique_ptr<Node>> nodes_;
             NodeMap<Node, Edge> node_map_;
+
+            // Minimization DFA's node_lists and node_list-edge map
+            NodeListSet node_list_set_;
+            NodeListEdgeMap node_list_map_;
         };
 
         DFA::DFA(std::vector<std::unique_ptr<Node>> &&nodes,
                  NodeMap<Node, Edge> &&node_map,
                  const std::shared_ptr<EdgeSet> &edge_set)
-            : edge_set_(edge_set)
+            : edge_set_(edge_set),
+              nodes_(std::move(nodes)),
+              node_map_(std::move(node_map))
         {
-            auto ns = std::move(nodes);
-            auto nm = std::move(node_map);
-            NodeListSet node_list_set;
-            NodeListEdgeMap node_list_map;
-            Minimization(ns, nm, node_list_set, node_list_map);
+            Minimization();
         }
 
-        void DFA::Minimization(const std::vector<std::unique_ptr<Node>> &nodes,
-                               const NodeMap<Node, Edge> &node_map,
-                               NodeListSet &node_list_set,
-                               NodeListEdgeMap &node_list_map)
+        void DFA::Minimization()
         {
             std::unique_ptr<NodeList> accept_node_list(new NodeList);
             std::unique_ptr<NodeList> not_accept_node_list(new NodeList);
+            NodeOwnerMap node_owner_map;
 
-            for (auto &n : nodes)
+            for (auto &n : nodes_)
             {
                 if (n->type_ == Node::Type_Accept)
+                {
                     accept_node_list->push_back(n.get());
+                    node_owner_map[n.get()] = accept_node_list.get();
+                }
                 else
+                {
                     not_accept_node_list->push_back(n.get());
+                    node_owner_map[n.get()] = not_accept_node_list.get();
+                }
             }
 
-            node_list_set.push_back(std::move(accept_node_list));
-            node_list_set.push_back(std::move(not_accept_node_list));
-            DoMinimization(node_map, node_list_set, node_list_map);
+            node_list_set_.push_back(std::move(accept_node_list));
+            node_list_set_.push_back(std::move(not_accept_node_list));
+            DoMinimization(node_owner_map);
         }
 
-        void DFA::DoMinimization(const NodeMap<Node, Edge> &node_map,
-                                 NodeListSet &node_list_set,
-                                 NodeListEdgeMap &node_list_map)
+        void DFA::DoMinimization(NodeOwnerMap &node_owner_map)
         {
+            std::size_t old_size = 0;
+
+            do
+            {
+                old_size = node_list_set_.size();
+                SplitAll(node_owner_map);
+            } while (old_size != node_list_set_.size());
+        }
+
+        void DFA::SplitAll(NodeOwnerMap &node_owner_map)
+        {
+            std::queue<NodeList *> work_list;
+
+            for (auto &node_list : node_list_set_)
+                work_list.push(node_list.get());
+
+            while (!work_list.empty())
+            {
+                auto node_list = work_list.front();
+                work_list.pop();
+                Split(*node_list, node_owner_map);
+            }
+        }
+
+        void DFA::Split(NodeList &node_list,
+                        NodeOwnerMap &node_owner_map)
+        {
+            assert(!node_list.empty());
+
+            for (auto edge_it = edge_set_->Begin();
+                 edge_it != edge_set_->End(); ++edge_it)
+            {
+                auto edge = &(*edge_it);
+                auto node_it = node_list.begin();
+                auto mapped_node_list = node_list_map_.Map(&node_list, edge);
+                if (!mapped_node_list)
+                {
+                    const Node *mapped_node = nullptr;
+                    while (!mapped_node && node_it != node_list.end())
+                        mapped_node = node_map_.Map(*node_it++, edge);
+                    if (mapped_node)
+                    {
+                        mapped_node_list = node_owner_map[mapped_node];
+                        node_list_map_.Set(&node_list, edge, mapped_node_list);
+                    }
+                }
+
+                NodeList *new_list = nullptr;
+                while (node_it != node_list.end())
+                {
+                    auto mapped_node = node_map_.Map(*node_it, edge);
+                    if (mapped_node)
+                    {
+                        auto mapped_node_owner = node_owner_map[mapped_node];
+                        if (mapped_node_owner != mapped_node_list)
+                        {
+                            if (!new_list)
+                            {
+                                new_list = new NodeList;
+                                node_list_set_.push_back(std::unique_ptr<NodeList>(new_list));
+                                node_list_map_.Set(new_list, edge, mapped_node_owner);
+                            }
+
+                            node_owner_map[*node_it] = new_list;
+                            new_list->splice(node_it++, node_list);
+                            continue;
+                        }
+                    }
+
+                    ++node_it;
+                }
+
+                // We split new_list from node_list, so we split completely and return.
+                if (new_list)
+                    return ;
+            }
         }
 
         // Construct DFA from NFA
