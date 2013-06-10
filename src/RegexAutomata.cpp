@@ -1,5 +1,6 @@
 #include "RegexAutomata.h"
 #include "RegexParser.h"
+#include <iostream>
 #include <vector>
 #include <list>
 #include <queue>
@@ -171,9 +172,9 @@ namespace regex
 
             VISIT_NODE(CharNode);
             VISIT_NODE(CharRangeNode);
-            VISIT_NODE(ConcatenationNode) { }
-            VISIT_NODE(AlternationNode) { }
-            VISIT_NODE(ClosureNode) { }
+            VISIT_NODE(ConcatenationNode);
+            VISIT_NODE(AlternationNode);
+            VISIT_NODE(ClosureNode);
 
         private:
             EdgeSet *edge_set_;
@@ -187,6 +188,23 @@ namespace regex
         void EdgeSetConstructorVisitor::Visit(CharRangeNode *ast, void *data)
         {
             edge_set_->Insert(ast->first_, ast->last_);
+        }
+
+        void EdgeSetConstructorVisitor::Visit(ConcatenationNode *ast, void *data)
+        {
+            for (auto &node : ast->nodes_)
+                node->Accept(this, data);
+        }
+
+        void EdgeSetConstructorVisitor::Visit(AlternationNode *ast, void *data)
+        {
+            for (auto &node : ast->nodes_)
+                node->Accept(this, data);
+        }
+
+        void EdgeSetConstructorVisitor::Visit(ClosureNode *ast, void *data)
+        {
+            ast->node_->Accept(this, data);
         }
 
         // Template class to map (NodeType, EdgeType) to NodeType
@@ -356,6 +374,32 @@ namespace regex
                 return edge_set_;
             }
 
+            void Debug() const
+            {
+                std::cout << "NFA:" << std::endl;
+                std::cout << "nodes:" << std::endl;
+                for (auto &n : nodes_)
+                {
+                    std::cout << "  " << n.get() << ": (" << n->TypeDesc() << ","
+                              << n->index_ << ")" << std::endl;
+                }
+
+                std::cout << "edges:" << std::endl;
+                std::cout << "  " << &epsilon_ << ": epsilon" << std::endl;
+                for (auto it = edge_set_->Begin(); it != edge_set_->End(); ++it)
+                {
+                    std::cout << "  " << &(*it) << ": [" << it->first_ << "-"
+                              << it->last_ << "]" << std::endl;
+                }
+
+                std::cout << "node-edge map:" << std::endl;
+                for (auto it = node_map_.Begin(); it != node_map_.End(); ++it)
+                {
+                    std::cout << "  " << it->first.first << " -> " << it->first.second
+                              << " -> " << it->second << std::endl;
+                }
+            }
+
         private:
             // All NFA nodes
             NodeList nodes_;
@@ -454,21 +498,21 @@ namespace regex
             std::vector<const Node *> all_first;
             std::vector<const Node *> all_last;
 
-            for (auto it = ast->nodes_.begin(); it != ast->nodes_.end(); ++it)
+            for (auto &node : ast->nodes_)
             {
                 DataType pair;
-                (*it)->Accept(this, &pair);
+                node->Accept(this, &pair);
                 all_first.push_back(pair.first);
                 all_last.push_back(pair.second);
             }
 
             auto node1 = nfa_->AddNode();
-            for (auto it = all_first.begin(); it != all_first.end(); ++it)
-                nfa_->SetMap(node1, nfa_->GetEpsilon(), *it);
+            for (auto first : all_first)
+                nfa_->SetMap(node1, nfa_->GetEpsilon(), first);
 
             auto node2 = nfa_->AddNode();
-            for (auto it = all_last.begin(); it != all_last.end(); ++it)
-                nfa_->SetMap(*it, nfa_->GetEpsilon(), node2);
+            for (auto last : all_last)
+                nfa_->SetMap(last, nfa_->GetEpsilon(), node2);
 
             FillData(data, node1, node2);
         }
@@ -641,12 +685,12 @@ namespace regex
             void operator = (const BitSetSet &) = delete;
 
             // Add a BitSet, return the pointer of BitSet in the
-            // BitSetSet and the bitset is existed or not
+            // BitSetSet and the bitset inserted success or not.
             std::pair<const BitSet *, bool> AddBitSet(const BitSet &bitset)
             {
                 auto p = new BitSet(bitset);
                 auto pair = bitsets_.insert(std::unique_ptr<BitSet>(p));
-                return std::make_pair(pair.first->get(), !pair.second);
+                return std::make_pair(pair.first->get(), pair.second);
             }
 
             Iterator Begin() const
@@ -672,6 +716,46 @@ namespace regex
 
             DFA(const DFA &) = delete;
             void operator = (const DFA &) = delete;
+
+            void Debug() const
+            {
+                std::cout << "DFA:" << std::endl;
+
+                std::cout << "not minimization:" << std::endl;
+                std::cout << "nodes:" << std::endl;
+                for (auto &n : nodes_)
+                {
+                    std::cout << "  " << n.get() << ": (" << n->TypeDesc()
+                              << "," << n->index_ << ")" << std::endl;
+                }
+
+                std::cout << "node-edge map:" << std::endl;
+                for (auto it = node_map_.Begin(); it != node_map_.End(); ++it)
+                {
+                    std::cout << "  " << it->first.first << " -> " << it->first.second
+                              << " -> " << it->second << std::endl;
+                }
+
+                std::cout << "\nminimization:" << std::endl;
+                std::cout << "nodes:" << std::endl;
+                for (auto &nl : node_list_set_)
+                {
+                    std::cout << "  " << nl.get() << ":";
+                    for (auto &n : *nl)
+                    {
+                        std::cout << " " << n->TypeDesc();
+                    }
+                    std::cout << std::endl;
+                }
+
+                std::cout << "node-edge map:" << std::endl;
+                for (auto it = node_list_map_.Begin();
+                     it != node_list_map_.End(); ++it)
+                {
+                    std::cout << "  " << it->first.first << " -> " << it->first.second
+                              << " -> " << it->second << std::endl;
+                }
+            }
 
         private:
             typedef std::list<const Node *> NodeList;
@@ -798,7 +882,7 @@ namespace regex
                             }
 
                             node_owner_map[*node_it] = new_list;
-                            new_list->splice(node_it++, node_list);
+                            new_list->splice(new_list->end(), node_list, node_it++);
                             continue;
                         }
                     }
@@ -823,12 +907,34 @@ namespace regex
 
             std::unique_ptr<DFA> ConstructDFA() const;
 
+            void Debug() const
+            {
+                std::cout << "subsets:" << std::endl;
+                for (auto it = subsets_.Begin(); it != subsets_.End(); ++it)
+                {
+                    std::cout << "  " << it->get() << ":";
+                    if ((*it)->IsSet(nfa_->GetStartNode()->index_))
+                        std::cout << " start ";
+                    if ((*it)->IsSet(nfa_->GetAcceptNode()->index_))
+                        std::cout << " accept";
+                    std::cout << std::endl;
+                }
+
+                std::cout << "subset-edge map:" << std::endl;
+                for (auto it = node_map_.Begin(); it != node_map_.End(); ++it)
+                {
+                    std::cout << "  " << it->first.first << " -> " << it->first.second
+                              << " -> " << it->second << std::endl;
+                }
+            }
+
         private:
             // Construct epsilon closure
             void ConstructEpsilonClosure();
 
-            // Epsilon closure the bitset from node
-            void EpsilonClosure(BitSet &bitset, const Node *node);
+            // Epsilon closure the bitset from node, return true
+            // when bitset changed
+            bool EpsilonClosure(BitSet &bitset, const Node *node);
 
             // Subset construct start BitSet from NFA
             const BitSet * ConstructStartBitSet();
@@ -943,9 +1049,9 @@ namespace regex
             }
         }
 
-        void DFAConstructor::EpsilonClosure(BitSet &bitset, const Node *node)
+        bool DFAConstructor::EpsilonClosure(BitSet &bitset, const Node *node)
         {
-            bitset.MergeFrom(*epsilon_extend_[node->index_]);
+            return bitset.MergeFrom(*epsilon_extend_[node->index_]);
         }
 
         const BitSet * DFAConstructor::ConstructStartBitSet()
@@ -960,6 +1066,7 @@ namespace regex
             assert(nfa_->NodeCount() == q->ElemCount());
             BitSet bitset(nfa_->NodeCount());
 
+            bool changed = false;
             auto count = q->ElemCount();
             for (std::size_t i = 0; i < count; ++i)
             {
@@ -967,14 +1074,19 @@ namespace regex
                 {
                     auto node1 = nfa_->GetNode(i);
                     auto node2 = nfa_->Map(node1, edge);
-                    if (node2)
-                        EpsilonClosure(bitset, node2);
+                    if (node2 && EpsilonClosure(bitset, node2))
+                        changed = true;
                 }
             }
 
-            auto pair = subsets_.AddBitSet(bitset);
-
-            return std::make_pair(pair.first, !pair.second);
+            if (changed)
+            {
+                return subsets_.AddBitSet(bitset);
+            }
+            else
+            {
+                return std::make_pair(nullptr, false);
+            }
         }
 
         void DFAConstructor::SubsetConstruction()
@@ -994,11 +1106,14 @@ namespace regex
                 for (auto it = edge_iter_pair.first;
                      it != edge_iter_pair.second; ++it)
                 {
-                    auto pair = ConstructDelta(q, &(*it));
-                    node_map_.Set(q, &(*it), pair.first);
+                    auto next = ConstructDelta(q, &(*it));
+                    // We set bitset-edge map when the next bitset
+                    // is existed.
+                    if (next.first)
+                        node_map_.Set(q, &(*it), next.first);
 
-                    if (pair.second)
-                        work_list.push(pair.first);
+                    if (next.second)
+                        work_list.push(next.first);
                 }
             }
         }
@@ -1007,8 +1122,17 @@ namespace regex
         {
             auto ast = Parse(re);
             auto nfa = ConvertASTToNFA(std::move(ast));
+            nfa->Debug();
+
+            std::cout << std::endl;
+
             DFAConstructor dfa_constructor(std::move(nfa));
+            dfa_constructor.Debug();
+
+            std::cout << std::endl;
+
             auto dfa = dfa_constructor.ConstructDFA();
+            dfa->Debug();
         }
     } // namespace automata
 } // namespace regex

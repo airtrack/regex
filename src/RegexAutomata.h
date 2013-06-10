@@ -23,7 +23,22 @@ namespace regex
             std::size_t index_;
 
             Node(std::size_t index, Type t)
-                : index_(index), type_(t) { }
+                : index_(index), type_(t)
+            {
+            }
+
+            const char * TypeDesc() const
+            {
+                switch (type_)
+                {
+                    case Type_Start:
+                        return "Type_Start";
+                    case Type_Accept:
+                        return "Type_Accept";
+                    case Type_Normal:
+                        return "Type_Normal";
+                }
+            }
         };
 
         struct Edge
