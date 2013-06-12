@@ -13,7 +13,8 @@ int main(int argc, const char **argv)
 
     try
     {
-        regex::automata::ConstructStateMachine(argv[1]);
+        auto state_machine = regex::automata::ConstructStateMachine(argv[1]);
+        assert(state_machine);
         std::cout << "regex \"" << argv[1] << "\" is ok." << std::endl;
     } catch (const regex::ParseException &e)
     {

@@ -2,63 +2,52 @@
 #define REGEX_AUTOMATA_H
 
 #include <string>
+#include <vector>
+#include <memory>
 
 namespace regex
 {
     namespace automata
     {
-        struct Node
+        struct CharRange
         {
-            enum Type
-            {
-                Type_Start,
-                Type_Accept,
-                Type_Normal,
-            };
-
-            // Type of this node
-            Type type_;
-
-            // Index and number of this node
-            std::size_t index_;
-
-            Node(std::size_t index, Type t)
-                : index_(index), type_(t)
-            {
-            }
-
-            const char * TypeDesc() const
-            {
-                switch (type_)
-                {
-                    case Type_Start:
-                        return "Type_Start";
-                    case Type_Accept:
-                        return "Type_Accept";
-                    case Type_Normal:
-                        return "Type_Normal";
-                }
-            }
-        };
-
-        struct Edge
-        {
-            // Character range [first_, last_]
             int first_;
             int last_;
 
-            // Is epsilon edge or not
-            bool is_epsilon_;
+            CharRange(int first, int last) : first_(first), last_(last) { }
+        };
 
-            Edge() : first_(0), last_(0), is_epsilon_(true) { }
+        struct State
+        {
+            // Accept state or not
+            bool accept_;
 
-            Edge(int first, int last)
-                : first_(first), last_(last), is_epsilon_(false)
+            // Next states
+            std::vector<const State *> next_;
+
+            State(bool accept, std::size_t next_state_count)
+                : accept_(accept),
+                  next_(next_state_count)
             {
             }
         };
 
-        void ConstructStateMachine(const std::string &re);
+        struct StateMachine
+        {
+            // Character set
+            std::vector<CharRange> char_set_;
+            // All states
+            std::vector<std::unique_ptr<State>> states_;
+            // Start state of the state machine
+            const State *start_state_;
+
+            StateMachine() : start_state_(nullptr) { }
+
+            StateMachine(const StateMachine &) = delete;
+            void operator = (const StateMachine &) = delete;
+        };
+
+        std::unique_ptr<StateMachine> ConstructStateMachine(const std::string &re);
     } // namespace automata
 } // namespace regex
 

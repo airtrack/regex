@@ -1,11 +1,9 @@
 #include "RegexAutomata.h"
 #include "RegexParser.h"
 #include <iostream>
-#include <vector>
 #include <list>
 #include <queue>
 #include <set>
-#include <memory>
 #include <limits>
 #include <unordered_map>
 #include <unordered_set>
@@ -16,6 +14,57 @@ namespace regex
     namespace automata
     {
         using namespace parser;
+
+        struct Node
+        {
+            enum Type
+            {
+                Type_Start,
+                Type_Accept,
+                Type_Normal,
+            };
+
+            // Type of this node
+            Type type_;
+
+            // Index and number of this node
+            std::size_t index_;
+
+            Node(std::size_t index, Type t)
+            : index_(index), type_(t)
+            {
+            }
+
+            const char * TypeDesc() const
+            {
+                switch (type_)
+                {
+                    case Type_Start:
+                        return "Type_Start";
+                    case Type_Accept:
+                        return "Type_Accept";
+                    case Type_Normal:
+                        return "Type_Normal";
+                }
+            }
+        };
+
+        struct Edge
+        {
+            // Character range [first_, last_]
+            int first_;
+            int last_;
+
+            // Is epsilon edge or not
+            bool is_epsilon_;
+
+            Edge() : first_(0), last_(0), is_epsilon_(true) { }
+
+            Edge(int first, int last)
+            : first_(first), last_(last), is_epsilon_(false)
+            {
+            }
+        };
 
         bool operator < (const Edge &left, const Edge &right)
         {
@@ -717,6 +766,8 @@ namespace regex
             DFA(const DFA &) = delete;
             void operator = (const DFA &) = delete;
 
+            std::unique_ptr<StateMachine> ConstructStateMachine() const;
+
             void Debug() const
             {
                 std::cout << "DFA:" << std::endl;
@@ -763,6 +814,7 @@ namespace regex
             typedef NodeMap<NodeList, Edge> NodeListEdgeMap;
             typedef std::unordered_map<const Node *, NodeList *> NodeOwnerMap;
 
+            // For DFA minimization
             void Minimization();
             void DoMinimization(NodeOwnerMap &node_owner_map);
             void SplitAll(NodeOwnerMap &node_owner_map);
@@ -789,6 +841,70 @@ namespace regex
               node_map_(std::move(node_map))
         {
             Minimization();
+        }
+
+        std::unique_ptr<StateMachine> DFA::ConstructStateMachine() const
+        {
+            std::unique_ptr<StateMachine> state_machine(new StateMachine);
+            std::unordered_map<const Edge *, std::size_t> edge_index;
+            std::unordered_map<const NodeList *, State *> node_list_state;
+
+            // Transform edges to char set
+            for (auto it = edge_set_->Begin(); it != edge_set_->End(); ++it)
+            {
+                auto index = state_machine->char_set_.size();
+                edge_index[&(*it)] = index;
+                state_machine->char_set_.push_back(CharRange(it->first_, it->last_));
+            }
+
+            // Transform node_lists to states
+            for (auto &node_list : node_list_set_)
+            {
+                bool accept = false;
+                bool start = false;
+                for (auto node : *node_list)
+                {
+                    switch (node->type_)
+                    {
+                        case Node::Type_Accept:
+                            accept = true;
+                            break;
+                        case Node::Type_Start:
+                            start = true;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
+                auto *state = new State(accept, state_machine->char_set_.size());
+                state_machine->states_.push_back(std::unique_ptr<State>(state));
+                node_list_state[node_list.get()] = state;
+
+                if (start)
+                {
+                    assert(!state_machine->start_state_);
+                    state_machine->start_state_ = state;
+                }
+            }
+            assert(state_machine->start_state_);
+
+            // Fill all state transition
+            for (auto it = node_list_map_.Begin(); it != node_list_map_.End(); ++it)
+            {
+                auto from_state = node_list_state[it->first.first];
+                auto to_state = node_list_state[it->second];
+                auto index = edge_index[it->first.second];
+
+                assert(from_state);
+                assert(to_state);
+                assert(index < from_state->next_.size());
+                assert(index < state_machine->char_set_.size());
+
+                from_state->next_[index] = to_state;
+            }
+
+            return std::move(state_machine);
         }
 
         void DFA::Minimization()
@@ -1118,7 +1234,7 @@ namespace regex
             }
         }
 
-        void ConstructStateMachine(const std::string &re)
+        std::unique_ptr<StateMachine> ConstructStateMachine(const std::string &re)
         {
             auto ast = Parse(re);
             auto nfa = ConvertASTToNFA(std::move(ast));
@@ -1133,6 +1249,8 @@ namespace regex
 
             auto dfa = dfa_constructor.ConstructDFA();
             dfa->Debug();
+
+            return dfa->ConstructStateMachine();
         }
     } // namespace automata
 } // namespace regex
