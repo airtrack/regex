@@ -19,33 +19,42 @@ namespace regex
         {
             enum Type
             {
-                Type_Start,
-                Type_Accept,
-                Type_Normal,
+                Type_Start = (1 << 0),
+                Type_Accept = (1 << 1),
+                Type_Normal = (1 << 2),
             };
 
             // Type of this node
-            Type type_;
+            int type_;
 
             // Index and number of this node
             std::size_t index_;
 
-            Node(std::size_t index, Type t)
-            : index_(index), type_(t)
+            Node(std::size_t index, int type)
+                : type_(type), index_(index)
             {
             }
 
-            const char * TypeDesc() const
+            std::string TypeDesc() const
             {
-                switch (type_)
+                std::string desc;
+                if (type_ & Type_Start)
                 {
-                    case Type_Start:
-                        return "Type_Start";
-                    case Type_Accept:
-                        return "Type_Accept";
-                    case Type_Normal:
-                        return "Type_Normal";
+                    desc += "Type_Start";
                 }
+                if (type_ & Type_Accept)
+                {
+                    if (!desc.empty())
+                        desc += " ";
+                    desc += "Type_Accept";
+                }
+                if (type_ & Type_Normal)
+                {
+                    if (!desc.empty())
+                        desc += " ";
+                    desc += "Type_Normal";
+                }
+                return desc;
             }
         };
 
@@ -61,7 +70,7 @@ namespace regex
             Edge() : first_(0), last_(0), is_epsilon_(true) { }
 
             Edge(int first, int last)
-            : first_(first), last_(last), is_epsilon_(false)
+                : first_(first), last_(last), is_epsilon_(false)
             {
             }
         };
@@ -816,6 +825,7 @@ namespace regex
 
             // For DFA minimization
             void Minimization();
+            void BuildNodeListEdgeMap(NodeOwnerMap &node_owner_map);
             void DoMinimization(NodeOwnerMap &node_owner_map);
             void SplitAll(NodeOwnerMap &node_owner_map);
             void Split(NodeList &node_list,
@@ -860,21 +870,17 @@ namespace regex
             // Transform node_lists to states
             for (auto &node_list : node_list_set_)
             {
+                if (node_list->empty())
+                    continue;
+
                 bool accept = false;
                 bool start = false;
                 for (auto node : *node_list)
                 {
-                    switch (node->type_)
-                    {
-                        case Node::Type_Accept:
-                            accept = true;
-                            break;
-                        case Node::Type_Start:
-                            start = true;
-                            break;
-                        default:
-                            break;
-                    }
+                    if (node->type_ & Node::Type_Accept)
+                        accept = true;
+                    if (node->type_ & Node::Type_Start)
+                        start = true;
                 }
 
                 auto *state = new State(accept, state_machine->char_set_.size());
@@ -915,7 +921,7 @@ namespace regex
 
             for (auto &n : nodes_)
             {
-                if (n->type_ == Node::Type_Accept)
+                if (n->type_ & Node::Type_Accept)
                 {
                     accept_node_list->push_back(n.get());
                     node_owner_map[n.get()] = accept_node_list.get();
@@ -930,6 +936,31 @@ namespace regex
             node_list_set_.push_back(std::move(accept_node_list));
             node_list_set_.push_back(std::move(not_accept_node_list));
             DoMinimization(node_owner_map);
+            BuildNodeListEdgeMap(node_owner_map);
+        }
+
+        void DFA::BuildNodeListEdgeMap(NodeOwnerMap &node_owner_map)
+        {
+            for (auto node_list_it = node_list_set_.begin();
+                 node_list_it != node_list_set_.end(); ++node_list_it)
+            {
+                auto node_list = node_list_it->get();
+                if (node_list->empty())
+                    continue;
+
+                auto node = *node_list->begin();
+                for (auto edge_it = edge_set_->Begin();
+                     edge_it != edge_set_->End(); ++edge_it)
+                {
+                    auto edge = &(*edge_it);
+                    auto mapped_node = node_map_.Map(node, edge);
+                    if (mapped_node)
+                    {
+                        auto mapped_node_list = node_owner_map[mapped_node];
+                        node_list_map_.Set(node_list, edge, mapped_node_list);
+                    }
+                }
+            }
         }
 
         void DFA::DoMinimization(NodeOwnerMap &node_owner_map)
@@ -961,52 +992,48 @@ namespace regex
         void DFA::Split(NodeList &node_list,
                         NodeOwnerMap &node_owner_map)
         {
-            assert(!node_list.empty());
+            // If node count less equal than 1, it can not be split
+            if (node_list.size() <= 1)
+                return ;
 
             for (auto edge_it = edge_set_->Begin();
                  edge_it != edge_set_->End(); ++edge_it)
             {
                 auto edge = &(*edge_it);
                 auto node_it = node_list.begin();
-                auto mapped_node_list = node_list_map_.Map(&node_list, edge);
-                if (!mapped_node_list)
-                {
-                    const Node *mapped_node = nullptr;
-                    while (!mapped_node && node_it != node_list.end())
-                        mapped_node = node_map_.Map(*node_it++, edge);
-                    if (mapped_node)
-                    {
-                        mapped_node_list = node_owner_map[mapped_node];
-                        node_list_map_.Set(&node_list, edge, mapped_node_list);
-                    }
-                }
+                auto mapped_node = node_map_.Map(*node_it++, edge);
+                const NodeList *mapped_node_list = nullptr;
+
+                if (mapped_node)
+                    mapped_node_list = node_owner_map[mapped_node];
 
                 NodeList *new_list = nullptr;
                 while (node_it != node_list.end())
                 {
-                    auto mapped_node = node_map_.Map(*node_it, edge);
-                    if (mapped_node)
+                    auto new_node = *node_it;
+                    auto new_mapped_node = node_map_.Map(new_node, edge);
+                    const NodeList *new_mapped_node_list = nullptr;
+                    if (new_mapped_node)
+                        new_mapped_node_list = node_owner_map[new_mapped_node];
+
+                    if (new_mapped_node_list != mapped_node_list)
                     {
-                        auto mapped_node_owner = node_owner_map[mapped_node];
-                        if (mapped_node_owner != mapped_node_list)
+                        if (!new_list)
                         {
-                            if (!new_list)
-                            {
-                                new_list = new NodeList;
-                                node_list_set_.push_back(std::unique_ptr<NodeList>(new_list));
-                                node_list_map_.Set(new_list, edge, mapped_node_owner);
-                            }
-
-                            node_owner_map[*node_it] = new_list;
-                            new_list->splice(new_list->end(), node_list, node_it++);
-                            continue;
+                            new_list = new NodeList;
+                            node_list_set_.push_back(std::unique_ptr<NodeList>(new_list));
                         }
-                    }
 
-                    ++node_it;
+                        node_owner_map[new_node] = new_list;
+                        new_list->splice(new_list->end(), node_list, node_it++);
+                    }
+                    else
+                    {
+                        ++node_it;
+                    }
                 }
 
-                // We split new_list from node_list, so we split completely and return.
+                // If split success, we return
                 if (new_list)
                     return ;
             }
@@ -1028,11 +1055,11 @@ namespace regex
                 std::cout << "subsets:" << std::endl;
                 for (auto it = subsets_.Begin(); it != subsets_.End(); ++it)
                 {
-                    std::cout << "  " << it->get() << ":";
+                    std::cout << "  " << it->get() << ": ";
                     if ((*it)->IsSet(nfa_->GetStartNode()->index_))
-                        std::cout << " start ";
+                        std::cout << "start ";
                     if ((*it)->IsSet(nfa_->GetAcceptNode()->index_))
-                        std::cout << " accept";
+                        std::cout << "accept ";
                     std::cout << std::endl;
                 }
 
@@ -1090,12 +1117,15 @@ namespace regex
             for (auto it = subsets_.Begin(); it != subsets_.End(); ++it)
             {
                 auto index = dfa_nodes.size();
-                Node::Type type = Node::Type_Normal;
+                int type = 0;
 
                 if ((*it)->IsSet(nfa_start->index_))
-                    type = Node::Type_Start;
-                else if ((*it)->IsSet(nfa_accept->index_))
-                    type = Node::Type_Accept;
+                    type |= Node::Type_Start;
+                if ((*it)->IsSet(nfa_accept->index_))
+                    type |= Node::Type_Accept;
+
+                if (type == 0)
+                    type = Node::Type_Normal;
 
                 std::unique_ptr<Node> n(new Node(index, type));
                 bitset_node_map[it->get()] = n.get();
@@ -1122,8 +1152,8 @@ namespace regex
         {
             std::queue<const Node *> work_list;
             std::set<std::pair<const Node *, const Node *>> pre_epsilon_node;
-            const Node *min_ptr = std::numeric_limits<const Node *>::min();
-            const Node *max_ptr = std::numeric_limits<const Node *>::max();
+            const Node *min_ptr = 0x0;
+            const Node *max_ptr = reinterpret_cast<const Node *>(-1);
 
             std::size_t node_count = nfa_->NodeCount();
             for (std::size_t i = 0; i < node_count; ++i)
