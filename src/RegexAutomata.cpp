@@ -1264,6 +1264,28 @@ namespace regex
             }
         }
 
+        std::pair<bool, std::size_t> StateMachine::GetNextStateIndex(int c) const
+        {
+            assert(!char_set_.empty());
+
+            std::size_t left = 0;
+            std::size_t right = char_set_.size();
+            while (left < right)
+            {
+                std::size_t middle = (left + right) / 2;
+                const CharRange &range = char_set_[middle];
+
+                if (c >= range.first_ && c <= range.last_)
+                    return std::make_pair(true, middle);
+                else if (c < range.first_)
+                    right = middle;
+                else
+                    left = middle + 1;
+            }
+
+            return std::make_pair(false, 0);
+        }
+
         std::unique_ptr<StateMachine> ConstructStateMachine(const std::string &re)
         {
             auto ast = Parse(re);

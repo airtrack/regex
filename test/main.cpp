@@ -1,4 +1,4 @@
-#include "RegexAutomata.h"
+#include "Regex.h"
 #include "RegexException.h"
 #include <iostream>
 #include <assert.h>
@@ -13,8 +13,7 @@ int main(int argc, const char **argv)
 
     try
     {
-        auto state_machine = regex::automata::ConstructStateMachine(argv[1]);
-        assert(state_machine);
+        regex::Regex re(argv[1]);
         std::cout << "regex \"" << argv[1] << "\" is ok." << std::endl;
     } catch (const regex::ParseException &e)
     {

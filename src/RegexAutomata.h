@@ -45,6 +45,11 @@ namespace regex
 
             StateMachine(const StateMachine &) = delete;
             void operator = (const StateMachine &) = delete;
+
+            // Get index of next states in State by character 'c' as
+            // second value of return pair when first value of return
+            // pair is true.
+            std::pair<bool, std::size_t> GetNextStateIndex(int c) const;
         };
 
         std::unique_ptr<StateMachine> ConstructStateMachine(const std::string &re);
