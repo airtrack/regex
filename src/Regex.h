@@ -14,7 +14,15 @@ namespace regex
         Regex(const Regex &) = delete;
         void operator = (const Regex &) = delete;
 
-        const automata::State * GetStartState() const;
+        const automata::State * GetStartState() const
+        {
+            return state_machine_->start_state_;
+        }
+
+        std::pair<bool, std::size_t> GetNextStateIndex(int c) const
+        {
+            return state_machine_->GetNextStateIndex(c);
+        }
 
     private:
         std::string re_;
