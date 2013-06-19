@@ -30,4 +30,9 @@ namespace regex
         // If current_state is accept state, then match success.
         return current_state->accept_;
     }
+
+    void RegexMatcher::Search(const char *begin, const char *end,
+                              MatchResults &match_results) const
+    {
+    }
 } // namespace regex
