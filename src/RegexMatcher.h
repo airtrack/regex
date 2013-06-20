@@ -12,7 +12,8 @@ namespace regex
         const char *begin_;
         const char *end_;
 
-        Match(const char *begin, const char *end)
+        explicit Match(const char *begin = nullptr,
+                       const char *end = nullptr)
             : begin_(begin), end_(end)
         {
         }
@@ -58,6 +59,11 @@ namespace regex
             matchs_.push_back(Match(begin, end));
         }
 
+        void AddMatch(const Match &match)
+        {
+            matchs_.push_back(match);
+        }
+
         Matchs matchs_;
     };
 
@@ -70,15 +76,24 @@ namespace regex
         void operator = (const RegexMatcher &) = delete;
 
         // Check [begin, end) characters is match regex_ or not
-        bool Match(const char *begin, const char *end) const;
+        bool IsMatch(const char *begin, const char *end) const;
 
         // Search all matchs from [begin, end), all matchs
         // store in match_results
         void Search(const char *begin, const char *end,
-                    MatchResults &match_results) const;
+                    MatchResults &match_results);
 
     private:
+        // Find first match of regex_ from [current_, end_),
+        // if exist, then return true.
+        bool MatchOne(Match &match);
+        bool CheckLastAccept(Match &match);
+
         const Regex &regex_;
+        const char *current_;
+        const char *end_;
+        const char *start_;
+        const char *last_accept_;
     };
 } // namespace regex
 

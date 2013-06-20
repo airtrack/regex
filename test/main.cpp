@@ -20,9 +20,17 @@ int main(int argc, const char **argv)
 
         regex::RegexMatcher matcher(re);
         std::size_t len = strlen(argv[2]);
-        bool match = matcher.Match(argv[2], argv[2] + len);
-        std::cout << "\"" << argv[2] << "\"" << " match " << "\"" << argv[1] << "\" "
-                  << (match ? "ok" : "fail") << "." << std::endl;
+
+        regex::MatchResults results;
+        matcher.Search(argv[2], argv[2] + len, results);
+
+        std::cout << "search all results:" << std::endl;
+        for (auto it = results.Begin(); it != results.End(); ++it)
+        {
+            std::cout << it->GetString() << " ";
+        }
+
+        std::cout << std::endl;
     } catch (const regex::ParseException &e)
     {
         std::cout << "Parse error at index " << e.Position() << " :" << e.What() << std::endl;
