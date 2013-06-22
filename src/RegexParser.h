@@ -29,23 +29,44 @@ namespace regex
         class CharNode : public ASTNode
         {
         public:
-            explicit CharNode(char c) : c_(c) { }
+            explicit CharNode(int c) : c_(c) { }
 
             ACCEPT_VISITOR();
 
-            char c_;
+            int c_;
         };
 
-        // Node for character range. e.g., [a-z]
+        // Node for character range. e.g., [ ]
         class CharRangeNode : public ASTNode
         {
         public:
-            CharRangeNode(char f, char l) : first_(f), last_(l) { }
+            struct Range
+            {
+                int first_;
+                int last_;
+
+                explicit Range(int first = 0, int last = 0)
+                    : first_(first), last_(last)
+                {
+                }
+            };
+
+            CharRangeNode() { }
+
+            void AddRange(int first, int last)
+            {
+                ranges_.push_back(Range(first, last));
+            }
+
+            void AddChar(int c)
+            {
+                chars_.push_back(c);
+            }
 
             ACCEPT_VISITOR();
 
-            char first_;
-            char last_;
+            std::vector<Range> ranges_;
+            std::vector<int> chars_;
         };
 
         // Node for concatenate regex two or more. e.g., a[a-z]b

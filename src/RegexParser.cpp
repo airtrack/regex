@@ -55,6 +55,26 @@ namespace regex
                    c == '*' || c == '|';
         }
 
+        void CheckRange(int first, int last, std::size_t index)
+        {
+            bool ok = false;
+            if (first >= 'a' && first <= 'z' &&
+                last >= 'a' && last <= 'z' &&
+                first <= last)
+                ok = true;
+            if (first >= 'A' && first <= 'Z' &&
+                last >= 'A' && last <= 'Z' &&
+                first <= last)
+                ok = true;
+            if (first >= '0' && first <= '9' &&
+                last >= '0' && last <= '9' &&
+                first <= last)
+                ok = true;
+
+            if (!ok)
+                throw ParseException("invalid range", index);
+        }
+
         std::unique_ptr<ASTNode> ParseRE(LexStream &stream);
 
         std::unique_ptr<ASTNode> ParseChar(LexStream &stream)
@@ -77,34 +97,66 @@ namespace regex
 
         std::unique_ptr<ASTNode> ParseCharRange(LexStream &stream)
         {
-            stream.Next();              // skip '['
+            stream.Next();              // Skip '['
 
-            int first = stream.Get();
+            std::unique_ptr<CharRangeNode> char_range(new CharRangeNode);
 
-            if (first == EOF)
-                throw ParseException("incomplete \"[a-b]\"", stream.Index());
-            stream.Next();
+            // If range head is ']' or '-', then add it to char_range
+            if (stream.Get() == ']' || stream.Get() == '-')
+            {
+                char_range->AddChar(stream.Get());
+                stream.Next();
+            }
 
-            if (stream.Get() != '-')
-                throw ParseException("expect '-'", stream.Index());
-            stream.Next();              // skip '-'
+            while (stream.Get() != EOF && stream.Get() != ']')
+            {
+                int f = stream.Get();
+                stream.Next();
+                if (f == '-')
+                {
+                    // If range tail is '-', then add it to char_range
+                    if (stream.Get() == ']')
+                        char_range->AddChar(f);
+                }
+                else
+                {
+                    int m = stream.Get();
+                    if (m == '-')
+                    {
+                        stream.Next();
+                        if (stream.Get() == ']' || stream.Get() == EOF)
+                        {
+                            // '-' is range tail
+                            char_range->AddChar(f);
+                            char_range->AddChar(m);
+                        }
+                        else
+                        {
+                            // Check range 'x-y', and add range 'x-y' to char_range
+                            CheckRange(f, stream.Get(), stream.Index());
+                            char_range->AddRange(f, stream.Get());
+                            stream.Next();
+                        }
+                    }
+                    else
+                    {
+                        // Add normal character
+                        char_range->AddChar(f);
+                    }
+                }
+            }
 
-            int last = stream.Get();
+            if (stream.Get() == EOF)
+                throw ParseException("incomplete []", stream.Index());
+            else
+                stream.Next();
 
-            if (last == EOF)
-                throw ParseException("expect second char", stream.Index());
-            stream.Next();
-
-            if (stream.Get() != ']')
-                throw ParseException("incomplete \"[a-b]\"", stream.Index());
-            stream.Next();              // skip ']'
-
-            return std::unique_ptr<ASTNode>(new CharRangeNode(first, last));
+            return std::move(char_range);
         }
 
         std::unique_ptr<ASTNode> ParseParentheseRE(LexStream &stream)
         {
-            stream.Next();              // skip '('
+            stream.Next();              // Skip '('
             std::unique_ptr<ASTNode> node = ParseRE(stream);
 
             if (stream.Get() != ')')

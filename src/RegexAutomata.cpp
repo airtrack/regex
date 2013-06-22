@@ -245,7 +245,11 @@ namespace regex
 
         void EdgeSetConstructorVisitor::Visit(CharRangeNode *ast, void *data)
         {
-            edge_set_->Insert(ast->first_, ast->last_);
+            for (auto &range : ast->ranges_)
+                edge_set_->Insert(range.first_, range.last_);
+
+            for (auto c : ast->chars_)
+                edge_set_->Insert(c);
         }
 
         void EdgeSetConstructorVisitor::Visit(ConcatenationNode *ast, void *data)
@@ -520,10 +524,22 @@ namespace regex
             auto node1 = nfa_->AddNode();
             auto node2 = nfa_->AddNode();
 
-            auto edges = nfa_->SearchEdge(ast->first_, ast->last_);
-            for (; edges.first != edges.second; ++edges.first)
+            for (auto &range : ast->ranges_)
             {
-                nfa_->SetMap(node1, &(*edges.first), node2);
+                auto edges = nfa_->SearchEdge(range.first_, range.last_);
+                for (; edges.first != edges.second; ++edges.first)
+                {
+                    nfa_->SetMap(node1, &(*edges.first), node2);
+                }
+            }
+
+            for (auto c : ast->chars_)
+            {
+                auto edges = nfa_->SearchEdge(c);
+                for (; edges.first != edges.second; ++edges.first)
+                {
+                    nfa_->SetMap(node1, &(*edges.first), node2);
+                }
             }
 
             FillData(data, node1, node2);
