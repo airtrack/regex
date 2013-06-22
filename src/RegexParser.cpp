@@ -72,7 +72,13 @@ namespace regex
                 ok = true;
 
             if (!ok)
-                throw ParseException("invalid range", index);
+            {
+                std::string desc("invalid range ");
+                desc.push_back(first);
+                desc.push_back('-');
+                desc.push_back(last);
+                throw ParseException(desc, index);
+            }
         }
 
         std::unique_ptr<ASTNode> ParseRE(LexStream &stream);
