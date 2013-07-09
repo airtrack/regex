@@ -1,5 +1,8 @@
 #include "RegexParser.h"
 #include "RegexException.h"
+#include <ctype.h>
+#include <stdlib.h>
+#include <limits>
 
 namespace regex
 {
@@ -16,6 +19,7 @@ namespace regex
         ACCEPT_VISITOR_IMPL(ConcatenationNode)
         ACCEPT_VISITOR_IMPL(AlternationNode)
         ACCEPT_VISITOR_IMPL(ClosureNode)
+        ACCEPT_VISITOR_IMPL(RepeatNode)
 
         class LexStream
         {
@@ -79,6 +83,24 @@ namespace regex
                 desc.push_back(last);
                 throw ParseException(desc, index);
             }
+        }
+
+        int ParseNumber(LexStream &stream)
+        {
+            if (!isdigit(stream.Get()))
+                throw ParseException("expect digit", stream.Index());
+
+            std::string number;
+            number.push_back(stream.Get());
+            stream.Next();
+
+            while (isdigit(stream.Get()))
+            {
+                number.push_back(stream.Get());
+                stream.Next();
+            }
+
+            return atoi(number.c_str());
         }
 
         std::unique_ptr<ASTNode> ParseRE(LexStream &stream);
@@ -182,6 +204,27 @@ namespace regex
                 return ParseChar(stream);
         }
 
+        std::unique_ptr<ASTNode> ParseRepeat(LexStream &stream, std::unique_ptr<ASTNode> node)
+        {
+            stream.Next();              // Skip '{'
+
+            int min = ParseNumber(stream);
+
+            if (stream.Get() != ',')
+                throw ParseException("expect ,", stream.Index());
+            stream.Next();              // Skip ','
+
+            int max = std::numeric_limits<int>::max();
+            if (stream.Get() != '}')
+                max = ParseNumber(stream);
+
+            if (stream.Get() != '}')
+                throw ParseException("expect }", stream.Index());
+            stream.Next();              // Skip '}'
+
+            return std::unique_ptr<RepeatNode>(new RepeatNode(std::move(node), min, max, true));
+        }
+
         std::unique_ptr<ASTNode> ParseConcatBase(LexStream &stream)
         {
             std::unique_ptr<ASTNode> node = ParseBase(stream);
@@ -190,6 +233,10 @@ namespace regex
             {
                 stream.Next();
                 node = std::unique_ptr<ASTNode>(new ClosureNode(std::move(node)));
+            }
+            else if (stream.Get() == '{')
+            {
+                node = ParseRepeat(stream, std::move(node));
             }
 
             return std::move(node);

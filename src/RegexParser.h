@@ -111,6 +111,27 @@ namespace regex
             std::unique_ptr<ASTNode> node_;
         };
 
+        // Node for repeat regex min to max times. e.g., a{1, 2}
+        class RepeatNode : public ASTNode
+        {
+        public:
+            RepeatNode(std::unique_ptr<ASTNode> node,
+                       int min_times, int max_times, bool greedy)
+                : node_(std::move(node)),
+                  min_times_(min_times),
+                  max_times_(max_times),
+                  greedy_(greedy)
+            {
+            }
+
+            ACCEPT_VISITOR();
+
+            std::unique_ptr<ASTNode> node_;
+            int min_times_;
+            int max_times_;
+            bool greedy_;
+        };
+
         class Visitor
         {
         public:
@@ -119,6 +140,7 @@ namespace regex
             VISIT_NODE(ConcatenationNode) = 0;
             VISIT_NODE(AlternationNode) = 0;
             VISIT_NODE(ClosureNode) = 0;
+            VISIT_NODE(RepeatNode) = 0;
 
             virtual ~Visitor() { }
         };

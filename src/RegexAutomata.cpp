@@ -233,6 +233,7 @@ namespace regex
             VISIT_NODE(ConcatenationNode);
             VISIT_NODE(AlternationNode);
             VISIT_NODE(ClosureNode);
+            VISIT_NODE(RepeatNode);
 
         private:
             EdgeSet *edge_set_;
@@ -265,6 +266,11 @@ namespace regex
         }
 
         void EdgeSetConstructorVisitor::Visit(ClosureNode *ast, void *data)
+        {
+            ast->node_->Accept(this, data);
+        }
+
+        void EdgeSetConstructorVisitor::Visit(RepeatNode *ast, void *data)
         {
             ast->node_->Accept(this, data);
         }
@@ -493,6 +499,7 @@ namespace regex
             VISIT_NODE(ConcatenationNode);
             VISIT_NODE(AlternationNode);
             VISIT_NODE(ClosureNode);
+            VISIT_NODE(RepeatNode);
 
         private:
             void FillData(void *data, const Node *node1, const Node *node2)
@@ -605,6 +612,10 @@ namespace regex
             nfa_->SetMap(node1, nfa_->GetEpsilon(), node2);
 
             FillData(data, node1, node2);
+        }
+
+        void NFAConverterVisitor::Visit(RepeatNode *ast, void *data)
+        {
         }
 
         std::unique_ptr<NFA> ConvertASTToNFA(const std::unique_ptr<ASTNode> &ast)
