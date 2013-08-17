@@ -17,6 +17,9 @@ namespace regex
             CharRange(int first, int last) : first_(first), last_(last) { }
         };
 
+        struct StateMachine;
+
+        // Base state class
         struct State
         {
             // Accept state or not
@@ -25,11 +28,24 @@ namespace regex
             // Next states
             std::vector<const State *> next_;
 
-            State(bool accept, std::size_t next_state_count)
-                : accept_(accept),
+            explicit State(std::size_t next_state_count)
+                : accept_(false),
                   next_(next_state_count)
             {
             }
+
+            virtual ~State()
+            {
+            }
+
+            const State * GetNextState(const StateMachine *state_machine,
+                                       const char *&current, const char *&end) const;
+
+            // Complete this state, then call 'GetNextState' to get next state
+            // when first of return value is true, if second of return value is
+            // existed, then use second value as next state.
+            virtual std::pair<bool, const State *> CompleteState(const char *&current,
+                                                                 const char *&end) const;
         };
 
         struct StateMachine
@@ -50,6 +66,33 @@ namespace regex
             // second value of return pair when first value of return
             // pair is true.
             std::pair<bool, std::size_t> GetNextStateIndex(int c) const;
+        };
+
+        // Repeat state class
+        struct RepeatState : public State
+        {
+            int repeat_min_;
+            int repeat_max_;
+            std::unique_ptr<StateMachine> sub_state_machine_;
+
+            // If direct next state existed, then state machine
+            // move to direct next state when current state is
+            // completely.
+            const State *direct_next_;
+
+            RepeatState(std::size_t next_state_count,
+                        int repeat_min, int repeat_max,
+                        std::unique_ptr<StateMachine> sub_state_machine)
+                : State(next_state_count),
+                  repeat_min_(repeat_min),
+                  repeat_max_(repeat_max),
+                  sub_state_machine_(std::move(sub_state_machine)),
+                  direct_next_(nullptr)
+            {
+            }
+
+            virtual std::pair<bool, const State *> CompleteState(const char *&current,
+                                                                 const char *&end) const;
         };
 
         std::unique_ptr<StateMachine> ConstructStateMachine(const std::string &re);

@@ -24,6 +24,11 @@ namespace regex
             return state_machine_->GetNextStateIndex(c);
         }
 
+        const automata::StateMachine * GetStateMachine() const
+        {
+            return state_machine_.get();
+        }
+
     private:
         std::string re_;
         std::unique_ptr<automata::StateMachine> state_machine_;

@@ -4,7 +4,7 @@
 namespace regex
 {
     RegexMatcher::RegexMatcher(const Regex &regex)
-        : regex_(regex),
+        : state_machine_(regex.GetStateMachine()),
           current_(nullptr),
           end_(nullptr),
           start_(nullptr),
@@ -12,27 +12,60 @@ namespace regex
     {
     }
 
-    bool RegexMatcher::IsMatch(const char *begin, const char *end) const
+    RegexMatcher::RegexMatcher(const automata::StateMachine *state_machine)
+        : state_machine_(state_machine),
+          current_(nullptr),
+          end_(nullptr),
+          start_(nullptr),
+          last_accept_(nullptr)
     {
-        auto current_state = regex_.GetStartState();
+    }
+
+    bool RegexMatcher::IsMatch(const char *begin, const char *end)
+    {
+        auto match = MatchPart(begin, end, &begin);
+        return match && begin == end;
+    }
+
+    bool RegexMatcher::MatchPart(const char *begin, const char *end,
+                                 const char **new_begin)
+    {
+        auto current_state = state_machine_->start_state_;
         assert(current_state);
 
-        for (auto current = begin; current != end; ++current)
-        {
-            // If *current is not belongs to the char set of
-            // regex_, then match fail.
-            auto next = regex_.GetNextStateIndex(*current);
-            if (!next.first)
-                return false;
+        current_ = begin;
+        end_ = end;
+        last_accept_ = nullptr;
 
-            // If next state is nullptr, then match fail.
-            current_state = current_state->next_[next.second];
-            if (!current_state)
-                return false;
+        while (current_ != end)
+        {
+            auto complete = current_state->CompleteState(current_, end_);
+            if (complete.first)
+            {
+                if (current_state->accept_)
+                    last_accept_ = current_ - 1;
+
+                if (complete.second)
+                    current_state = complete.second;
+                else
+                    current_state = current_state->GetNextState(state_machine_, current_, end_);
+            }
+
+            if (!complete.first || !current_state)
+            {
+                if (new_begin && last_accept_)
+                    *new_begin = last_accept_ + 1;
+                return last_accept_ != nullptr;
+            }
         }
 
-        // If current_state is accept state, then match success.
-        return current_state->accept_;
+        auto complete = current_state->CompleteState(current_, end_);
+        if (complete.first && current_state->accept_)
+            last_accept_ = current_ - 1;
+
+        if (new_begin && last_accept_)
+            *new_begin = last_accept_ + 1;
+        return last_accept_ != nullptr;
     }
 
     void RegexMatcher::Search(const char *begin, const char *end,
@@ -51,33 +84,33 @@ namespace regex
 
     bool RegexMatcher::MatchOne(Match &match)
     {
-        auto current_state = regex_.GetStartState();
+        auto current_state = state_machine_->start_state_;
         assert(current_state);
 
-        start_ = nullptr;
+        start_ = current_;
         last_accept_ = nullptr;
-        for (; current_ != end_; ++current_)
+
+        while (current_ != end_)
         {
-            auto next = regex_.GetNextStateIndex(*current_);
-            if (next.first && current_state->next_[next.second])
+            auto complete = current_state->CompleteState(current_, end_);
+            if (complete.first)
             {
-                start_ = current_;
-                break;
+                if (current_state->accept_)
+                    last_accept_ = current_ - 1;
+
+                if (complete.second)
+                    current_state = complete.second;
+                else
+                    current_state = current_state->GetNextState(state_machine_, current_, end_);
             }
+
+            if (!complete.first || !current_state)
+                return CheckLastAccept(match);
         }
 
-        for (; current_ != end_; ++current_)
-        {
-            auto next = regex_.GetNextStateIndex(*current_);
-            if (!next.first)
-                return CheckLastAccept(match);
-
-            current_state = current_state->next_[next.second];
-            if (!current_state)
-                return CheckLastAccept(match);
-            else if (current_state->accept_)
-                last_accept_ = current_;
-        }
+        auto complete = current_state->CompleteState(current_, end_);
+        if (complete.first && current_state->accept_)
+            last_accept_ = current_ - 1;
 
         return CheckLastAccept(match);
     }
@@ -88,7 +121,12 @@ namespace regex
         {
             match.begin_ = start_;
             match.end_ = last_accept_ + 1;
-            current_ = match.end_;
+            // If 'match' is empty, then set 'current_'
+            // pointer to next character.
+            if (match.begin_ == match.end_)
+                current_ = match.end_ + 1;
+            else
+                current_ = match.end_;
             return true;
         }
         else if (start_)

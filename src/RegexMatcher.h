@@ -71,12 +71,18 @@ namespace regex
     {
     public:
         explicit RegexMatcher(const Regex &regex);
+        explicit RegexMatcher(const automata::StateMachine *state_machine);
 
         RegexMatcher(const RegexMatcher &) = delete;
         void operator = (const RegexMatcher &) = delete;
 
         // Check [begin, end) characters is match regex_ or not
-        bool IsMatch(const char *begin, const char *end) const;
+        bool IsMatch(const char *begin, const char *end);
+
+        // Is match from 'begin', '*new_begin' store new begin position
+        // when match success.
+        bool MatchPart(const char *begin, const char *end,
+                       const char **new_begin);
 
         // Search all matchs from [begin, end), all matchs
         // store in match_results
@@ -89,7 +95,7 @@ namespace regex
         bool MatchOne(Match &match);
         bool CheckLastAccept(Match &match);
 
-        const Regex &regex_;
+        const automata::StateMachine *state_machine_;
         const char *current_;
         const char *end_;
         const char *start_;
