@@ -12,6 +12,14 @@
 		CE10CE18174D1026001DA6F0 /* RegexAutomata.h in Headers */ = {isa = PBXBuildFile; fileRef = CE10CE17174D1026001DA6F0 /* RegexAutomata.h */; };
 		CE10CE1A174D1068001DA6F0 /* RegexAutomata.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CE10CE19174D1068001DA6F0 /* RegexAutomata.cpp */; };
 		CE3C0912174A6A7F0018E778 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CE3C0911174A6A7F0018E778 /* main.cpp */; };
+		CE61852217C07B6000CDB81C /* RegexFAElement.h in Headers */ = {isa = PBXBuildFile; fileRef = CE61852117C07B6000CDB81C /* RegexFAElement.h */; };
+		CE61852417C07BA600CDB81C /* RegexFAElement.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CE61852317C07BA600CDB81C /* RegexFAElement.cpp */; };
+		CE61852617C080A700CDB81C /* RegexNFA.h in Headers */ = {isa = PBXBuildFile; fileRef = CE61852517C080A700CDB81C /* RegexNFA.h */; };
+		CE61852817C080D400CDB81C /* RegexNFA.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CE61852717C080D400CDB81C /* RegexNFA.cpp */; };
+		CE61852A17C0827F00CDB81C /* RegexDFA.h in Headers */ = {isa = PBXBuildFile; fileRef = CE61852917C0827F00CDB81C /* RegexDFA.h */; };
+		CE61852C17C082D000CDB81C /* RegexDFA.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CE61852B17C082D000CDB81C /* RegexDFA.cpp */; };
+		CE61852E17C0994800CDB81C /* RegexConstructor.h in Headers */ = {isa = PBXBuildFile; fileRef = CE61852D17C0994800CDB81C /* RegexConstructor.h */; };
+		CE61853017C099A000CDB81C /* RegexConstructor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CE61852F17C099A000CDB81C /* RegexConstructor.cpp */; };
 		CE69FB2F176F5F4B003E871D /* RegexMatcher.h in Headers */ = {isa = PBXBuildFile; fileRef = CE69FB2E176F5F4B003E871D /* RegexMatcher.h */; };
 		CE69FB31176F5FF3003E871D /* RegexMatcher.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CE69FB30176F5FF3003E871D /* RegexMatcher.cpp */; };
 		CEC09091174A668D006B2C38 /* libregex.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CEEEA2E617487BEA007D4322 /* libregex.a */; };
@@ -47,6 +55,14 @@
 		CE10CE17174D1026001DA6F0 /* RegexAutomata.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RegexAutomata.h; path = ../src/RegexAutomata.h; sourceTree = "<group>"; };
 		CE10CE19174D1068001DA6F0 /* RegexAutomata.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = RegexAutomata.cpp; path = ../src/RegexAutomata.cpp; sourceTree = "<group>"; };
 		CE3C0911174A6A7F0018E778 /* main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = main.cpp; path = ../test/main.cpp; sourceTree = "<group>"; };
+		CE61852117C07B6000CDB81C /* RegexFAElement.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RegexFAElement.h; path = ../src/RegexFAElement.h; sourceTree = "<group>"; };
+		CE61852317C07BA600CDB81C /* RegexFAElement.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = RegexFAElement.cpp; path = ../src/RegexFAElement.cpp; sourceTree = "<group>"; };
+		CE61852517C080A700CDB81C /* RegexNFA.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RegexNFA.h; path = ../src/RegexNFA.h; sourceTree = "<group>"; };
+		CE61852717C080D400CDB81C /* RegexNFA.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = RegexNFA.cpp; path = ../src/RegexNFA.cpp; sourceTree = "<group>"; };
+		CE61852917C0827F00CDB81C /* RegexDFA.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RegexDFA.h; path = ../src/RegexDFA.h; sourceTree = "<group>"; };
+		CE61852B17C082D000CDB81C /* RegexDFA.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = RegexDFA.cpp; path = ../src/RegexDFA.cpp; sourceTree = "<group>"; };
+		CE61852D17C0994800CDB81C /* RegexConstructor.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RegexConstructor.h; path = ../src/RegexConstructor.h; sourceTree = "<group>"; };
+		CE61852F17C099A000CDB81C /* RegexConstructor.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = RegexConstructor.cpp; path = ../src/RegexConstructor.cpp; sourceTree = "<group>"; };
 		CE69FB2E176F5F4B003E871D /* RegexMatcher.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RegexMatcher.h; path = ../src/RegexMatcher.h; sourceTree = "<group>"; };
 		CE69FB30176F5FF3003E871D /* RegexMatcher.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = RegexMatcher.cpp; path = ../src/RegexMatcher.cpp; sourceTree = "<group>"; };
 		CEC09088174A6666006B2C38 /* test */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = test; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -104,15 +120,23 @@
 		CEEEA2DE1748721F007D4322 /* src */ = {
 			isa = PBXGroup;
 			children = (
-				CEEEA2DF1748726B007D4322 /* RegexParser.h */,
-				CEEEA2E01748769C007D4322 /* RegexParser.cpp */,
-				CEEEA2EB17487FD1007D4322 /* RegexException.h */,
-				CE10CE13174D0DB2001DA6F0 /* Regex.h */,
 				CE10CE15174D0DFF001DA6F0 /* Regex.cpp */,
-				CE10CE17174D1026001DA6F0 /* RegexAutomata.h */,
+				CE10CE13174D0DB2001DA6F0 /* Regex.h */,
 				CE10CE19174D1068001DA6F0 /* RegexAutomata.cpp */,
-				CE69FB2E176F5F4B003E871D /* RegexMatcher.h */,
+				CE10CE17174D1026001DA6F0 /* RegexAutomata.h */,
+				CE61852F17C099A000CDB81C /* RegexConstructor.cpp */,
+				CE61852D17C0994800CDB81C /* RegexConstructor.h */,
+				CE61852B17C082D000CDB81C /* RegexDFA.cpp */,
+				CE61852917C0827F00CDB81C /* RegexDFA.h */,
+				CEEEA2EB17487FD1007D4322 /* RegexException.h */,
+				CE61852317C07BA600CDB81C /* RegexFAElement.cpp */,
+				CE61852117C07B6000CDB81C /* RegexFAElement.h */,
 				CE69FB30176F5FF3003E871D /* RegexMatcher.cpp */,
+				CE69FB2E176F5F4B003E871D /* RegexMatcher.h */,
+				CE61852717C080D400CDB81C /* RegexNFA.cpp */,
+				CE61852517C080A700CDB81C /* RegexNFA.h */,
+				CEEEA2E01748769C007D4322 /* RegexParser.cpp */,
+				CEEEA2DF1748726B007D4322 /* RegexParser.h */,
 			);
 			name = src;
 			sourceTree = "<group>";
@@ -128,6 +152,10 @@
 				CE10CE14174D0DB2001DA6F0 /* Regex.h in Headers */,
 				CE10CE18174D1026001DA6F0 /* RegexAutomata.h in Headers */,
 				CE69FB2F176F5F4B003E871D /* RegexMatcher.h in Headers */,
+				CE61852217C07B6000CDB81C /* RegexFAElement.h in Headers */,
+				CE61852617C080A700CDB81C /* RegexNFA.h in Headers */,
+				CE61852A17C0827F00CDB81C /* RegexDFA.h in Headers */,
+				CE61852E17C0994800CDB81C /* RegexConstructor.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -213,6 +241,10 @@
 				CE10CE16174D0DFF001DA6F0 /* Regex.cpp in Sources */,
 				CE10CE1A174D1068001DA6F0 /* RegexAutomata.cpp in Sources */,
 				CE69FB31176F5FF3003E871D /* RegexMatcher.cpp in Sources */,
+				CE61852417C07BA600CDB81C /* RegexFAElement.cpp in Sources */,
+				CE61852817C080D400CDB81C /* RegexNFA.cpp in Sources */,
+				CE61852C17C082D000CDB81C /* RegexDFA.cpp in Sources */,
+				CE61853017C099A000CDB81C /* RegexConstructor.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

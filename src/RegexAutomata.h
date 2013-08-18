@@ -9,6 +9,8 @@ namespace regex
 {
     namespace automata
     {
+        class NFA;
+
         struct CharRange
         {
             int first_;
@@ -96,6 +98,8 @@ namespace regex
         };
 
         std::unique_ptr<StateMachine> ConstructStateMachine(const std::string &re);
+        std::unique_ptr<StateMachine> ConstructStateMachineFromNFA(std::unique_ptr<NFA> nfa,
+                                                                   const char *debug);
     } // namespace automata
 } // namespace regex
 
