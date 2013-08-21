@@ -132,6 +132,13 @@ namespace regex
             bool greedy_;
         };
 
+        // Node for dot. e.g. '.'
+        class DotNode : public ASTNode
+        {
+        public:
+            ACCEPT_VISITOR();
+        };
+
         class Visitor
         {
         public:
@@ -141,6 +148,7 @@ namespace regex
             VISIT_NODE(AlternationNode) = 0;
             VISIT_NODE(ClosureNode) = 0;
             VISIT_NODE(RepeatNode) = 0;
+            VISIT_NODE(DotNode) = 0;
 
             virtual ~Visitor() { }
         };

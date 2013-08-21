@@ -18,67 +18,6 @@ namespace regex
 
         std::unique_ptr<NFA> ConvertASTToNFA(const std::unique_ptr<ASTNode> &ast);
 
-        // Visitor class construct edge set from AST
-        class EdgeSetConstructorVisitor : public Visitor
-        {
-        public:
-            explicit EdgeSetConstructorVisitor(EdgeSet *edge_set)
-                : edge_set_(edge_set)
-            {
-            }
-
-            EdgeSetConstructorVisitor(const EdgeSetConstructorVisitor &) = delete;
-            void operator = (const EdgeSetConstructorVisitor &) = delete;
-
-            VISIT_NODE(CharNode);
-            VISIT_NODE(CharRangeNode);
-            VISIT_NODE(ConcatenationNode);
-            VISIT_NODE(AlternationNode);
-            VISIT_NODE(ClosureNode);
-            VISIT_NODE(RepeatNode);
-
-        private:
-            EdgeSet *edge_set_;
-        };
-
-        // Visitor for convert AST to NFA
-        class NFAConverterVisitor : public Visitor
-        {
-        public:
-            struct DataType
-            {
-                const Node *first;
-                const Node *second;
-                bool need_direct_edge;
-
-                DataType() : first(nullptr), second(nullptr), need_direct_edge(false)
-                {
-                }
-            };
-
-            explicit NFAConverterVisitor(NFA *nfa) : nfa_(nfa) { }
-
-            NFAConverterVisitor(const NFAConverterVisitor &) = delete;
-            void operator = (const NFAConverterVisitor &) = delete;
-
-            VISIT_NODE(CharNode);
-            VISIT_NODE(CharRangeNode);
-            VISIT_NODE(ConcatenationNode);
-            VISIT_NODE(AlternationNode);
-            VISIT_NODE(ClosureNode);
-            VISIT_NODE(RepeatNode);
-
-        private:
-            void FillData(void *data, const Node *node1, const Node *node2)
-            {
-                auto pair = reinterpret_cast<DataType *>(data);
-                pair->first = node1;
-                pair->second = node2;
-            }
-
-            NFA *nfa_;
-        };
-
         // Bit set for subset construction
         class BitSet
         {

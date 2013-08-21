@@ -1,5 +1,6 @@
 #include "RegexConstructor.h"
 #include <iostream>
+#include <limits>
 #include <assert.h>
 
 namespace regex
@@ -7,27 +8,32 @@ namespace regex
     namespace automata
     {
         using namespace parser;
+#define DOT_MIN 0
+#define DOT_MAX (std::numeric_limits<int>::max() - 1)
 
-        std::unique_ptr<NFA> ConvertASTToNFA(const std::unique_ptr<ASTNode> &ast)
+        // Visitor class construct edge set from AST
+        class EdgeSetConstructorVisitor : public Visitor
         {
-            // Construct EdgeSet
-            std::shared_ptr<EdgeSet> edge_set(new EdgeSet);
+        public:
+            explicit EdgeSetConstructorVisitor(EdgeSet *edge_set)
+            : edge_set_(edge_set)
+            {
+            }
 
-            EdgeSetConstructorVisitor edge_set_visitor(edge_set.get());
-            ast->Accept(&edge_set_visitor, nullptr);
+            EdgeSetConstructorVisitor(const EdgeSetConstructorVisitor &) = delete;
+            void operator = (const EdgeSetConstructorVisitor &) = delete;
 
-            // Construct NFA
-            std::unique_ptr<NFA> nfa(new NFA(edge_set));
+            VISIT_NODE(CharNode);
+            VISIT_NODE(CharRangeNode);
+            VISIT_NODE(ConcatenationNode);
+            VISIT_NODE(AlternationNode);
+            VISIT_NODE(ClosureNode);
+            VISIT_NODE(RepeatNode);
+            VISIT_NODE(DotNode);
 
-            NFAConverterVisitor visitor(nfa.get());
-            NFAConverterVisitor::DataType pair;
-            ast->Accept(&visitor, &pair);
-
-            nfa->SetStartNode(pair.first);
-            nfa->SetAcceptNode(pair.second);
-
-            return std::move(nfa);
-        }
+        private:
+            EdgeSet *edge_set_;
+        };
 
         void EdgeSetConstructorVisitor::Visit(CharNode *ast, void *data)
         {
@@ -66,6 +72,51 @@ namespace regex
             // edges in current regex, we will generate edges when sub-regex
             // construct(sub-NFA construct).
         }
+
+        void EdgeSetConstructorVisitor::Visit(DotNode *ast, void *data)
+        {
+            // Dot stand for any character.
+            edge_set_->Insert(DOT_MIN, DOT_MAX);
+        }
+
+        // Visitor for convert AST to NFA
+        class NFAConverterVisitor : public Visitor
+        {
+        public:
+            struct DataType
+            {
+                const Node *first;
+                const Node *second;
+                bool need_direct_edge;
+
+                DataType() : first(nullptr), second(nullptr), need_direct_edge(false)
+                {
+                }
+            };
+
+            explicit NFAConverterVisitor(NFA *nfa) : nfa_(nfa) { }
+
+            NFAConverterVisitor(const NFAConverterVisitor &) = delete;
+            void operator = (const NFAConverterVisitor &) = delete;
+
+            VISIT_NODE(CharNode);
+            VISIT_NODE(CharRangeNode);
+            VISIT_NODE(ConcatenationNode);
+            VISIT_NODE(AlternationNode);
+            VISIT_NODE(ClosureNode);
+            VISIT_NODE(RepeatNode);
+            VISIT_NODE(DotNode);
+
+        private:
+            void FillData(void *data, const Node *node1, const Node *node2)
+            {
+                auto pair = reinterpret_cast<DataType *>(data);
+                pair->first = node1;
+                pair->second = node2;
+            }
+
+            NFA *nfa_;
+        };
 
         void NFAConverterVisitor::Visit(CharNode *ast, void *data)
         {
@@ -186,6 +237,41 @@ namespace regex
 
             reinterpret_cast<DataType *>(data)->need_direct_edge = true;
             FillData(data, node, node);
+        }
+
+        void NFAConverterVisitor::Visit(DotNode *ast, void *data)
+        {
+            auto node1 = nfa_->AddNode();
+            auto node2 = nfa_->AddNode();
+
+            auto edges = nfa_->SearchEdge(DOT_MIN, DOT_MAX);
+            for (; edges.first != edges.second; ++edges.first)
+            {
+                nfa_->SetMap(node1, &(*edges.first), node2);
+            }
+
+            FillData(data, node1, node2);
+        }
+
+        std::unique_ptr<NFA> ConvertASTToNFA(const std::unique_ptr<ASTNode> &ast)
+        {
+            // Construct EdgeSet
+            std::shared_ptr<EdgeSet> edge_set(new EdgeSet);
+
+            EdgeSetConstructorVisitor edge_set_visitor(edge_set.get());
+            ast->Accept(&edge_set_visitor, nullptr);
+
+            // Construct NFA
+            std::unique_ptr<NFA> nfa(new NFA(edge_set));
+
+            NFAConverterVisitor visitor(nfa.get());
+            NFAConverterVisitor::DataType pair;
+            ast->Accept(&visitor, &pair);
+
+            nfa->SetStartNode(pair.first);
+            nfa->SetAcceptNode(pair.second);
+
+            return std::move(nfa);
         }
 
         BitSet::BitSet(std::size_t elem_count)

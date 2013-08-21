@@ -1,8 +1,9 @@
 #include "RegexParser.h"
 #include "RegexException.h"
+#include <limits>
 #include <ctype.h>
 #include <stdlib.h>
-#include <limits>
+#include <assert.h>
 
 namespace regex
 {
@@ -20,6 +21,7 @@ namespace regex
         ACCEPT_VISITOR_IMPL(AlternationNode)
         ACCEPT_VISITOR_IMPL(ClosureNode)
         ACCEPT_VISITOR_IMPL(RepeatNode)
+        ACCEPT_VISITOR_IMPL(DotNode)
 
         class LexStream
         {
@@ -57,7 +59,8 @@ namespace regex
             return c == '[' || c == ']' ||
                    c == '(' || c == ')' ||
                    c == '{' || c == '}' ||
-                   c == '*' || c == '|';
+                   c == '*' || c == '|' ||
+                   c == '.';
         }
 
         void CheckRange(int first, int last, std::size_t index)
@@ -122,6 +125,13 @@ namespace regex
 
             stream.Next();
             return std::unique_ptr<ASTNode>(new CharNode(c));
+        }
+
+        std::unique_ptr<ASTNode> ParseDot(LexStream &stream)
+        {
+            assert(stream.Get() == '.');
+            stream.Next();
+            return std::unique_ptr<ASTNode>(new DotNode);
         }
 
         std::unique_ptr<ASTNode> ParseCharRange(LexStream &stream)
@@ -201,6 +211,8 @@ namespace regex
                 return ParseCharRange(stream);
             else if (stream.Get() == '(')
                 return ParseParentheseRE(stream);
+            else if (stream.Get() == '.')
+                return ParseDot(stream);
             else
                 return ParseChar(stream);
         }
