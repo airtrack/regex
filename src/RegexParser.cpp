@@ -22,6 +22,7 @@ namespace regex
         ACCEPT_VISITOR_IMPL(ClosureNode)
         ACCEPT_VISITOR_IMPL(RepeatNode)
         ACCEPT_VISITOR_IMPL(DotNode)
+        ACCEPT_VISITOR_IMPL(QuestionMarkNode)
 
         class LexStream
         {
@@ -60,7 +61,7 @@ namespace regex
                    c == '(' || c == ')' ||
                    c == '{' || c == '}' ||
                    c == '*' || c == '|' ||
-                   c == '.';
+                   c == '.' || c == '?';
         }
 
         void CheckRange(int first, int last, std::size_t index)
@@ -246,6 +247,11 @@ namespace regex
             {
                 stream.Next();
                 node = std::unique_ptr<ASTNode>(new ClosureNode(std::move(node)));
+            }
+            else if (stream.Get() == '?')
+            {
+                stream.Next();
+                node = std::unique_ptr<ASTNode>(new QuestionMarkNode(std::move(node)));
             }
             else if (stream.Get() == '{')
             {

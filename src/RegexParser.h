@@ -139,6 +139,20 @@ namespace regex
             ACCEPT_VISITOR();
         };
 
+        // Node for question mark. e.g. "a?"
+        class QuestionMarkNode : public ASTNode
+        {
+        public:
+            explicit QuestionMarkNode(std::unique_ptr<ASTNode> node)
+                : node_(std::move(node))
+            {
+            }
+
+            ACCEPT_VISITOR();
+
+            std::unique_ptr<ASTNode> node_;
+        };
+
         class Visitor
         {
         public:
@@ -149,6 +163,7 @@ namespace regex
             VISIT_NODE(ClosureNode) = 0;
             VISIT_NODE(RepeatNode) = 0;
             VISIT_NODE(DotNode) = 0;
+            VISIT_NODE(QuestionMarkNode) = 0;
 
             virtual ~Visitor() { }
         };

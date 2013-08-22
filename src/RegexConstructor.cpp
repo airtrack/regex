@@ -30,6 +30,7 @@ namespace regex
             VISIT_NODE(ClosureNode);
             VISIT_NODE(RepeatNode);
             VISIT_NODE(DotNode);
+            VISIT_NODE(QuestionMarkNode);
 
         private:
             EdgeSet *edge_set_;
@@ -79,6 +80,11 @@ namespace regex
             edge_set_->Insert(DOT_MIN, DOT_MAX);
         }
 
+        void EdgeSetConstructorVisitor::Visit(QuestionMarkNode *ast, void *data)
+        {
+            ast->node_->Accept(this, data);
+        }
+
         // Visitor for convert AST to NFA
         class NFAConverterVisitor : public Visitor
         {
@@ -106,6 +112,7 @@ namespace regex
             VISIT_NODE(ClosureNode);
             VISIT_NODE(RepeatNode);
             VISIT_NODE(DotNode);
+            VISIT_NODE(QuestionMarkNode);
 
         private:
             void FillData(void *data, const Node *node1, const Node *node2)
@@ -249,6 +256,21 @@ namespace regex
             {
                 nfa_->SetMap(node1, &(*edges.first), node2);
             }
+
+            FillData(data, node1, node2);
+        }
+
+        void NFAConverterVisitor::Visit(QuestionMarkNode *ast, void *data)
+        {
+            auto node1 = nfa_->AddNode();
+            auto node2 = nfa_->AddNode();
+
+            DataType pair;
+            ast->node_->Accept(this, &pair);
+
+            nfa_->SetMap(node1, nfa_->GetEpsilon(), node2);
+            nfa_->SetMap(node1, nfa_->GetEpsilon(), pair.first);
+            nfa_->SetMap(pair.second, nfa_->GetEpsilon(), node2);
 
             FillData(data, node1, node2);
         }
