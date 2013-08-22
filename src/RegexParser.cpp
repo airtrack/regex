@@ -61,7 +61,8 @@ namespace regex
                    c == '(' || c == ')' ||
                    c == '{' || c == '}' ||
                    c == '*' || c == '|' ||
-                   c == '.' || c == '?';
+                   c == '.' || c == '?' ||
+                   c == '+';
         }
 
         void CheckRange(int first, int last, std::size_t index)
@@ -252,6 +253,12 @@ namespace regex
             {
                 stream.Next();
                 node = std::unique_ptr<ASTNode>(new QuestionMarkNode(std::move(node)));
+            }
+            else if (stream.Get() == '+')
+            {
+                stream.Next();
+                int max = std::numeric_limits<int>::max();
+                node = std::unique_ptr<ASTNode>(new RepeatNode(std::move(node), 1, max, true));
             }
             else if (stream.Get() == '{')
             {
