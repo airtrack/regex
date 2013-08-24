@@ -4,6 +4,7 @@
 #include <set>
 #include <memory>
 #include <string>
+#include <limits>
 #include <unordered_map>
 
 namespace regex
@@ -88,6 +89,10 @@ namespace regex
 
         struct Edge
         {
+            // Edge min max value
+            static const int Min = 0;
+            static const int Max = std::numeric_limits<int>::max() - 1;
+
             // Character range [first_, last_]
             int first_;
             int last_;

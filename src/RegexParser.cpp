@@ -142,6 +142,13 @@ namespace regex
 
             std::unique_ptr<CharRangeNode> char_range(new CharRangeNode);
 
+            // Check exclude metacharacter is existed or not
+            if (stream.Get() == '^')
+            {
+                stream.Next();
+                char_range->exclude_ = true;
+            }
+
             // If range head is ']' or '-', then add it to char_range
             if (stream.Get() == ']' || stream.Get() == '-')
             {

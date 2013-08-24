@@ -51,7 +51,7 @@ namespace regex
                 }
             };
 
-            CharRangeNode() { }
+            CharRangeNode() : exclude_(false) { }
 
             void AddRange(int first, int last)
             {
@@ -65,6 +65,8 @@ namespace regex
 
             ACCEPT_VISITOR();
 
+            // Exclude 'ranges_' and 'chars_'
+            bool exclude_;
             std::vector<Range> ranges_;
             std::vector<int> chars_;
         };

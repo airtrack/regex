@@ -1,6 +1,6 @@
 #include "RegexConstructor.h"
 #include <iostream>
-#include <limits>
+#include <functional>
 #include <assert.h>
 
 namespace regex
@@ -8,8 +8,33 @@ namespace regex
     namespace automata
     {
         using namespace parser;
-#define DOT_MIN 0
-#define DOT_MAX (std::numeric_limits<int>::max() - 1)
+
+        // Collect all edges from CharRangeNode 'ast' and store in
+        // EdgeSet 'edge_set'.
+        void CollectEdge(const CharRangeNode *ast, EdgeSet *edge_set)
+        {
+            for (auto &range : ast->ranges_)
+                edge_set->Insert(range.first_, range.last_);
+
+            for (auto c : ast->chars_)
+                edge_set->Insert(c);
+        }
+
+        // Call 'func' with all ranges which exclude all edges in EdgeSet.
+        void DoWithExcludeEdge(const EdgeSet &exclude,
+                               const std::function<void (int, int)> &func)
+        {
+            int current = Edge::Min;
+            for (auto it = exclude.Begin(); it != exclude.End(); ++it)
+            {
+                if (current < it->first_)
+                    func(current, it->first_ - 1);
+                current = it->last_ + 1;
+            }
+
+            if (current <= Edge::Max)
+                func(current, Edge::Max);
+        }
 
         // Visitor class construct edge set from AST
         class EdgeSetConstructorVisitor : public Visitor
@@ -43,11 +68,20 @@ namespace regex
 
         void EdgeSetConstructorVisitor::Visit(CharRangeNode *ast, void *data)
         {
-            for (auto &range : ast->ranges_)
-                edge_set_->Insert(range.first_, range.last_);
-
-            for (auto c : ast->chars_)
-                edge_set_->Insert(c);
+            if (ast->exclude_)
+            {
+                EdgeSet exclude;
+                CollectEdge(ast, &exclude);
+                void (EdgeSet::*insert)(int, int) = &EdgeSet::Insert;
+                DoWithExcludeEdge(exclude,
+                                  std::bind(insert, edge_set_,
+                                            std::placeholders::_1,
+                                            std::placeholders::_2));
+            }
+            else
+            {
+                CollectEdge(ast, edge_set_);
+            }
         }
 
         void EdgeSetConstructorVisitor::Visit(ConcatenationNode *ast, void *data)
@@ -77,7 +111,7 @@ namespace regex
         void EdgeSetConstructorVisitor::Visit(DotNode *ast, void *data)
         {
             // Dot stand for any character.
-            edge_set_->Insert(DOT_MIN, DOT_MAX);
+            edge_set_->Insert(Edge::Min, Edge::Max);
         }
 
         void EdgeSetConstructorVisitor::Visit(QuestionMarkNode *ast, void *data)
@@ -144,21 +178,31 @@ namespace regex
             auto node1 = nfa_->AddNode();
             auto node2 = nfa_->AddNode();
 
-            for (auto &range : ast->ranges_)
+            if (ast->exclude_)
             {
-                auto edges = nfa_->SearchEdge(range.first_, range.last_);
-                for (; edges.first != edges.second; ++edges.first)
-                {
-                    nfa_->SetMap(node1, &(*edges.first), node2);
-                }
+                // Set node-edge map with excluded edge set
+                EdgeSet exclude;
+                CollectEdge(ast, &exclude);
+                DoWithExcludeEdge(exclude, [node1, node2, this](int first, int last) {
+                    auto edges = nfa_->SearchEdge(first, last);
+                    for (; edges.first != edges.second; ++edges.first)
+                        nfa_->SetMap(node1, &(*edges.first), node2);
+                });
             }
-
-            for (auto c : ast->chars_)
+            else
             {
-                auto edges = nfa_->SearchEdge(c);
-                for (; edges.first != edges.second; ++edges.first)
+                // Set node-edge map with edges
+                for (auto &range : ast->ranges_)
                 {
-                    nfa_->SetMap(node1, &(*edges.first), node2);
+                    auto edges = nfa_->SearchEdge(range.first_, range.last_);
+                    for (; edges.first != edges.second; ++edges.first)
+                        nfa_->SetMap(node1, &(*edges.first), node2);
+                }
+                for (auto c : ast->chars_)
+                {
+                    auto edges = nfa_->SearchEdge(c);
+                    for (; edges.first != edges.second; ++edges.first)
+                        nfa_->SetMap(node1, &(*edges.first), node2);
                 }
             }
 
@@ -251,7 +295,7 @@ namespace regex
             auto node1 = nfa_->AddNode();
             auto node2 = nfa_->AddNode();
 
-            auto edges = nfa_->SearchEdge(DOT_MIN, DOT_MAX);
+            auto edges = nfa_->SearchEdge(Edge::Min, Edge::Max);
             for (; edges.first != edges.second; ++edges.first)
             {
                 nfa_->SetMap(node1, &(*edges.first), node2);
