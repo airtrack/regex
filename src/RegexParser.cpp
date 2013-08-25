@@ -231,17 +231,27 @@ namespace regex
             stream.Next();              // Skip '{'
 
             int min = ParseNumber(stream);
-
-            if (stream.Get() != ',')
-                throw ParseException("expect ,", stream.Index());
-            stream.Next();              // Skip ','
-
             int max = std::numeric_limits<int>::max();
-            if (stream.Get() != '}')
-                max = ParseNumber(stream);
 
-            if (stream.Get() != '}')
-                throw ParseException("expect }", stream.Index());
+            if (stream.Get() == '}')
+            {
+                max = min;
+            }
+            else
+            {
+                if (stream.Get() != ',')
+                    throw ParseException("expect ,", stream.Index());
+                stream.Next();          // Skip ','
+
+                if (stream.Get() != '}')
+                    max = ParseNumber(stream);
+
+                if (max < min)
+                    throw ParseException("max less than min", stream.Index());
+
+                if (stream.Get() != '}')
+                    throw ParseException("expect }", stream.Index());
+            }
             stream.Next();              // Skip '}'
 
             return std::unique_ptr<RepeatNode>(new RepeatNode(std::move(node), min, max, true));
