@@ -21,6 +21,8 @@ namespace regex
                 Type_Accept = (1 << 1),
                 Type_Normal = (1 << 2),
                 Type_Repeat = (1 << 3),
+                Type_LineHead = (1 << 4),
+                Type_LineTail = (1 << 5),
             };
 
             // Type of this node
@@ -189,7 +191,7 @@ namespace regex
             };
 
             typedef std::unordered_multimap<std::pair<const NodeType *, const EdgeType *>,
-            const NodeType *, NodeEdgeHash> NodeEdgeMap;
+                                            const NodeType *, NodeEdgeHash> NodeEdgeMap;
             typedef typename NodeEdgeMap::const_iterator Iterator;
 
             NodeMap() { }

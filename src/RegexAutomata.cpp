@@ -9,7 +9,7 @@ namespace regex
     namespace automata
     {
         const State * State::GetNextState(const StateMachine *state_machine,
-                                          const char *&current, const char *&end) const
+                                          const char *&current, const char *end) const
         {
             if (current == end)
                 return nullptr;
@@ -22,7 +22,8 @@ namespace regex
         }
 
         std::pair<bool, const State *> State::CompleteState(const char *&current,
-                                                            const char *&end) const
+                                                            const char *begin,
+                                                            const char *end) const
         {
             return std::make_pair(true, nullptr);
         }
@@ -48,7 +49,8 @@ namespace regex
         }
 
         std::pair<bool, const State *> RepeatState::CompleteState(const char *&current,
-                                                                  const char *&end) const
+                                                                  const char *begin,
+                                                                  const char *end) const
         {
             RegexMatcher matcher(sub_state_machine_.get());
 
@@ -67,6 +69,22 @@ namespace regex
             }
 
             return std::make_pair(match_times >= repeat_min_, direct_next_);
+        }
+
+        std::pair<bool, const State *> LineHeadState::CompleteState(const char *&current,
+                                                                    const char *begin,
+                                                                    const char *end) const
+        {
+            bool head = current == begin || *(current - 1) == '\n';
+            return std::make_pair(head, direct_next_);
+        }
+
+        std::pair<bool, const State *> LineTailState::CompleteState(const char *&current,
+                                                                    const char *begin,
+                                                                    const char *end) const
+        {
+            bool tail = current == end || *current == '\n';
+            return std::make_pair(tail, direct_next_);
         }
 
         std::unique_ptr<StateMachine> ConstructStateMachineFromNFA(std::unique_ptr<NFA> nfa,

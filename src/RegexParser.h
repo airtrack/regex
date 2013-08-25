@@ -99,20 +99,6 @@ namespace regex
             std::vector<std::unique_ptr<ASTNode>> nodes_;
         };
 
-        // Node for repeat regex zero or more. e.g., a*
-        class ClosureNode : public ASTNode
-        {
-        public:
-            explicit ClosureNode(std::unique_ptr<ASTNode> node)
-                : node_(std::move(node))
-            {
-            }
-
-            ACCEPT_VISITOR();
-
-            std::unique_ptr<ASTNode> node_;
-        };
-
         // Node for repeat regex min to max times. e.g., a{1, 2}
         class RepeatNode : public ASTNode
         {
@@ -141,18 +127,18 @@ namespace regex
             ACCEPT_VISITOR();
         };
 
-        // Node for question mark. e.g. "a?"
-        class QuestionMarkNode : public ASTNode
+        // Line head. e.g. '^'
+        class LineHeadNode : public ASTNode
         {
         public:
-            explicit QuestionMarkNode(std::unique_ptr<ASTNode> node)
-                : node_(std::move(node))
-            {
-            }
-
             ACCEPT_VISITOR();
+        };
 
-            std::unique_ptr<ASTNode> node_;
+        // Line tail. e.g. '$'
+        class LineTailNode : public ASTNode
+        {
+        public:
+            ACCEPT_VISITOR();
         };
 
         class Visitor
@@ -162,10 +148,10 @@ namespace regex
             VISIT_NODE(CharRangeNode) = 0;
             VISIT_NODE(ConcatenationNode) = 0;
             VISIT_NODE(AlternationNode) = 0;
-            VISIT_NODE(ClosureNode) = 0;
             VISIT_NODE(RepeatNode) = 0;
             VISIT_NODE(DotNode) = 0;
-            VISIT_NODE(QuestionMarkNode) = 0;
+            VISIT_NODE(LineHeadNode) = 0;
+            VISIT_NODE(LineTailNode) = 0;
 
             virtual ~Visitor() { }
         };

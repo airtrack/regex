@@ -96,8 +96,15 @@ namespace regex
         bool CheckLastAccept(Match &match);
 
         const automata::StateMachine *state_machine_;
+
+        // Current pointer
         const char *current_;
+
+        // Match buffer range
+        const char *begin_;
         const char *end_;
+
+        // Match start and accept pointer
         const char *start_;
         const char *last_accept_;
     };

@@ -19,10 +19,10 @@ namespace regex
         ACCEPT_VISITOR_IMPL(CharRangeNode)
         ACCEPT_VISITOR_IMPL(ConcatenationNode)
         ACCEPT_VISITOR_IMPL(AlternationNode)
-        ACCEPT_VISITOR_IMPL(ClosureNode)
         ACCEPT_VISITOR_IMPL(RepeatNode)
         ACCEPT_VISITOR_IMPL(DotNode)
-        ACCEPT_VISITOR_IMPL(QuestionMarkNode)
+        ACCEPT_VISITOR_IMPL(LineHeadNode)
+        ACCEPT_VISITOR_IMPL(LineTailNode)
 
         class LexStream
         {
@@ -249,17 +249,29 @@ namespace regex
 
         std::unique_ptr<ASTNode> ParseConcatBase(LexStream &stream)
         {
+            if (stream.Get() == '^')
+            {
+                stream.Next();
+                return std::unique_ptr<ASTNode>(new LineHeadNode);
+            }
+            else if (stream.Get() == '$')
+            {
+                stream.Next();
+                return std::unique_ptr<ASTNode>(new LineTailNode);
+            }
+
             std::unique_ptr<ASTNode> node = ParseBase(stream);
 
             if (stream.Get() == '*')
             {
                 stream.Next();
-                node = std::unique_ptr<ASTNode>(new ClosureNode(std::move(node)));
+                int max = std::numeric_limits<int>::max();
+                node = std::unique_ptr<ASTNode>(new RepeatNode(std::move(node), 0, max, true));
             }
             else if (stream.Get() == '?')
             {
                 stream.Next();
-                node = std::unique_ptr<ASTNode>(new QuestionMarkNode(std::move(node)));
+                node = std::unique_ptr<ASTNode>(new RepeatNode(std::move(node), 0, 1, true));
             }
             else if (stream.Get() == '+')
             {

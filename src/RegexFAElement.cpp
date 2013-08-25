@@ -5,31 +5,23 @@ namespace regex
 {
     namespace automata
     {
+#define ADD_DESC(type, desc_str)    \
+    if (type_ & type)               \
+    {                               \
+        if (!desc.empty())          \
+            desc += " ";            \
+        desc += desc_str;           \
+    }
+
         std::string Node::TypeDesc() const
         {
             std::string desc;
-            if (type_ & Type_Start)
-            {
-                desc += "Type_Start";
-            }
-            if (type_ & Type_Accept)
-            {
-                if (!desc.empty())
-                    desc += " ";
-                desc += "Type_Accept";
-            }
-            if (type_ & Type_Normal)
-            {
-                if (!desc.empty())
-                    desc += " ";
-                desc += "Type_Normal";
-            }
-            if (type_ & Type_Repeat)
-            {
-                if (!desc.empty())
-                    desc += " ";
-                desc += "Type_Repeat";
-            }
+            ADD_DESC(Type_Start, "Type_Start");
+            ADD_DESC(Type_Accept, "Type_Accept");
+            ADD_DESC(Type_Normal, "Type_Normal");
+            ADD_DESC(Type_Repeat, "Type_Repeat");
+            ADD_DESC(Type_LineHead, "Type_LineHead");
+            ADD_DESC(Type_LineTail, "Type_LineTail");
             return desc;
         }
 

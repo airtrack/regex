@@ -52,10 +52,10 @@ namespace regex
             VISIT_NODE(CharRangeNode);
             VISIT_NODE(ConcatenationNode);
             VISIT_NODE(AlternationNode);
-            VISIT_NODE(ClosureNode);
             VISIT_NODE(RepeatNode);
             VISIT_NODE(DotNode);
-            VISIT_NODE(QuestionMarkNode);
+            VISIT_NODE(LineHeadNode);
+            VISIT_NODE(LineTailNode);
 
         private:
             EdgeSet *edge_set_;
@@ -96,11 +96,6 @@ namespace regex
                 node->Accept(this, data);
         }
 
-        void EdgeSetConstructorVisitor::Visit(ClosureNode *ast, void *data)
-        {
-            ast->node_->Accept(this, data);
-        }
-
         void EdgeSetConstructorVisitor::Visit(RepeatNode *ast, void *data)
         {
             // ast->node_ is sub-regex, we don't visit sub-regex to generate
@@ -114,9 +109,14 @@ namespace regex
             edge_set_->Insert(Edge::Min, Edge::Max);
         }
 
-        void EdgeSetConstructorVisitor::Visit(QuestionMarkNode *ast, void *data)
+        void EdgeSetConstructorVisitor::Visit(LineHeadNode *ast, void *data)
         {
-            ast->node_->Accept(this, data);
+            // Do nothing
+        }
+
+        void EdgeSetConstructorVisitor::Visit(LineTailNode *ast, void *data)
+        {
+            // Do nothing
         }
 
         // Visitor for convert AST to NFA
@@ -143,10 +143,10 @@ namespace regex
             VISIT_NODE(CharRangeNode);
             VISIT_NODE(ConcatenationNode);
             VISIT_NODE(AlternationNode);
-            VISIT_NODE(ClosureNode);
             VISIT_NODE(RepeatNode);
             VISIT_NODE(DotNode);
-            VISIT_NODE(QuestionMarkNode);
+            VISIT_NODE(LineHeadNode);
+            VISIT_NODE(LineTailNode);
 
         private:
             void FillData(void *data, const Node *node1, const Node *node2)
@@ -263,22 +263,6 @@ namespace regex
             FillData(data, node1, node2);
         }
 
-        void NFAConverterVisitor::Visit(ClosureNode *ast, void *data)
-        {
-            auto node1 = nfa_->AddNode();
-            auto node2 = nfa_->AddNode();
-
-            DataType pair;
-            ast->node_->Accept(this, &pair);
-
-            nfa_->SetMap(pair.second, nfa_->GetEpsilon(), pair.first);
-            nfa_->SetMap(node1, nfa_->GetEpsilon(), pair.first);
-            nfa_->SetMap(pair.second, nfa_->GetEpsilon(), node2);
-            nfa_->SetMap(node1, nfa_->GetEpsilon(), node2);
-
-            FillData(data, node1, node2);
-        }
-
         void NFAConverterVisitor::Visit(RepeatNode *ast, void *data)
         {
             // Construct sub-NFA of sub-regex
@@ -304,19 +288,18 @@ namespace regex
             FillData(data, node1, node2);
         }
 
-        void NFAConverterVisitor::Visit(QuestionMarkNode *ast, void *data)
+        void NFAConverterVisitor::Visit(LineHeadNode *ast, void *data)
         {
-            auto node1 = nfa_->AddNode();
-            auto node2 = nfa_->AddNode();
+            auto node = nfa_->AddNode(Node::Type_LineHead);
+            reinterpret_cast<DataType *>(data)->need_direct_edge = true;
+            FillData(data, node, node);
+        }
 
-            DataType pair;
-            ast->node_->Accept(this, &pair);
-
-            nfa_->SetMap(node1, nfa_->GetEpsilon(), node2);
-            nfa_->SetMap(node1, nfa_->GetEpsilon(), pair.first);
-            nfa_->SetMap(pair.second, nfa_->GetEpsilon(), node2);
-
-            FillData(data, node1, node2);
+        void NFAConverterVisitor::Visit(LineTailNode *ast, void *data)
+        {
+            auto node = nfa_->AddNode(Node::Type_LineTail);
+            reinterpret_cast<DataType *>(data)->need_direct_edge = true;
+            FillData(data, node, node);
         }
 
         std::unique_ptr<NFA> ConvertASTToNFA(const std::unique_ptr<ASTNode> &ast)

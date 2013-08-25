@@ -242,9 +242,7 @@ namespace regex
 
                 bool accept = false;
                 bool start = false;
-                int min = 0;
-                int max = 0;
-                std::unique_ptr<StateMachine> sub_state_machine;
+                State *state = nullptr;
                 for (auto node : *node_list)
                 {
                     if (node->type_ & Node::Type_Accept)
@@ -253,18 +251,26 @@ namespace regex
                         start = true;
                     if (node->type_ & Node::Type_Repeat)
                     {
-                        min = node->repeat_min_;
-                        max = node->repeat_max_;
-                        sub_state_machine = ConstructStateMachineFromNFA(std::move(node->sub_nfa_),
-                                                                         "Sub regex:");
+                        assert(!state);
+                        auto sub_state_machine = ConstructStateMachineFromNFA(std::move(node->sub_nfa_),
+                                                                              "Sub regex:");
+                        state = new RepeatState(state_machine->char_set_.size(),
+                                                node->repeat_min_, node->repeat_max_,
+                                                std::move(sub_state_machine));
+                    }
+                    if (node->type_ & Node::Type_LineHead)
+                    {
+                        assert(!state);
+                        state = new LineHeadState(state_machine->char_set_.size());
+                    }
+                    if (node->type_ & Node::Type_LineTail)
+                    {
+                        assert(!state);
+                        state = new LineTailState(state_machine->char_set_.size());
                     }
                 }
 
-                State *state = nullptr;
-                if (sub_state_machine)
-                    state = new RepeatState(state_machine->char_set_.size(), min, max,
-                                            std::move(sub_state_machine));
-                else
+                if (!state)
                     state = new State(state_machine->char_set_.size());
 
                 state->accept_ = accept;
@@ -291,7 +297,7 @@ namespace regex
 
                 if (it->first.second == edge_set_->GetDirectEdge())
                 {
-                    RepeatState *from = static_cast<RepeatState *>(from_state);
+                    auto *from = static_cast<DirectNextState *>(from_state);
                     from->direct_next_ = to_state;
                 }
                 else

@@ -6,6 +6,7 @@ namespace regex
     RegexMatcher::RegexMatcher(const Regex &regex)
         : state_machine_(regex.GetStateMachine()),
           current_(nullptr),
+          begin_(nullptr),
           end_(nullptr),
           start_(nullptr),
           last_accept_(nullptr)
@@ -15,6 +16,7 @@ namespace regex
     RegexMatcher::RegexMatcher(const automata::StateMachine *state_machine)
         : state_machine_(state_machine),
           current_(nullptr),
+          begin_(nullptr),
           end_(nullptr),
           start_(nullptr),
           last_accept_(nullptr)
@@ -34,12 +36,13 @@ namespace regex
         assert(current_state);
 
         current_ = begin;
+        begin_ = begin;
         end_ = end;
         last_accept_ = nullptr;
 
         while (current_ != end)
         {
-            auto complete = current_state->CompleteState(current_, end_);
+            auto complete = current_state->CompleteState(current_, begin_, end_);
             if (complete.first)
             {
                 if (current_state->accept_)
@@ -59,7 +62,7 @@ namespace regex
             }
         }
 
-        auto complete = current_state->CompleteState(current_, end_);
+        auto complete = current_state->CompleteState(current_, begin_, end_);
         if (complete.first && current_state->accept_)
             last_accept_ = current_ - 1;
 
@@ -72,6 +75,7 @@ namespace regex
                               MatchResults &match_results)
     {
         current_ = begin;
+        begin_ = begin;
         end_ = end;
 
         while (current_ < end_)
@@ -92,7 +96,7 @@ namespace regex
 
         while (current_ != end_)
         {
-            auto complete = current_state->CompleteState(current_, end_);
+            auto complete = current_state->CompleteState(current_, begin_, end_);
             if (complete.first)
             {
                 if (current_state->accept_)
@@ -108,7 +112,7 @@ namespace regex
                 return CheckLastAccept(match);
         }
 
-        auto complete = current_state->CompleteState(current_, end_);
+        auto complete = current_state->CompleteState(current_, begin_, end_);
         if (complete.first && current_state->accept_)
             last_accept_ = current_ - 1;
 
