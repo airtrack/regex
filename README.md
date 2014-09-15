@@ -17,7 +17,7 @@ The following syntax features have been supported.
 Metacharacter|Description
 -------------|-----------
 `.`|Matches any single character exclude `\n`.
-`\|`|Alternation, `abc|def` matches `abc` or `def`.
+`|`|Alternation, `abc|def` matches `abc` or `def`.
 `[ ]`|A bracket expression. Matches a single character that is contained within the brackets. For example, `[abcx-z]` matches `a b c x y z`.
 `[^ ]`|Matches a single character that is not contained within the brackets. For example, `[^abc]` matches any character other than `a b c`.
 `^`|Matches the beginning of a line or string.
@@ -45,7 +45,7 @@ Metacharacter|Description
 `\W`|Matches `[^A-Za-z0-9_]`.
 
 Character classes|ASCII|Description
------------------|-----------
+-----------------|-----|-----------
 `[:alnum:]`|`[A-Z a-z 0-9]`|Alphanumeric characters
 `[:alpha:]`|`[A-Z a-z]`|Alphabetic characters
 `[:blank:]`|`[ \t]`|Space and tab
