@@ -7,7 +7,8 @@
 
 namespace skl {
 
-// Simple implementation for small set
+// Simple implementation of small set, after set has been constructed,
+// supply elements traverse performance better than std::set.
 template<typename T>
 class simple_set
 {
