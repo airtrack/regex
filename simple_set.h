@@ -17,6 +17,8 @@ public:
     typedef typename std::vector<T>::const_iterator iterator;
     typedef iterator const_iterator;
 
+    simple_set() { }
+
     template<typename U>
     simple_set(std::initializer_list<U> il)
     {
@@ -25,45 +27,45 @@ public:
             add(e);
     }
 
-    simple_set() = default;
-    simple_set(const simple_set&) = default;
-    simple_set(simple_set &&) = default;
-
-    simple_set& operator = (const simple_set&) = default;
-    simple_set& operator = (simple_set &&) = default;
-
-    bool empty() const
+    inline bool empty() const
     {
         return elems_.empty();
     }
 
-    void clear()
+    inline void clear()
     {
         elems_.clear();
     }
 
-    std::size_t size() const
+    inline std::size_t size() const
     {
         return elems_.size();
     }
 
-    void add(const T &o)
+    inline void add(const T &o)
     {
         if (!exist(o))
             elems_.push_back(o);
     }
 
-    bool exist(const T &o)
+    inline void erase(const T &o)
     {
-        return std::find(begin(), end(), o) != elems_.end();
+        auto it = std::find(begin(), end(), o);
+        if (it != end())
+            elems_.erase(it);
     }
 
-    iterator begin() const
+    inline bool exist(const T &o)
+    {
+        return std::find(begin(), end(), o) != end();
+    }
+
+    inline iterator begin() const
     {
         return elems_.begin();
     }
 
-    iterator end() const
+    inline iterator end() const
     {
         return elems_.end();
     }

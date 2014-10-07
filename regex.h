@@ -1,6 +1,7 @@
 #ifndef REGEX_H
 #define REGEX_H
 
+#include "bitmap.h"
 #include "digraph.h"
 #include <assert.h>
 #include <ctype.h>
@@ -23,26 +24,30 @@ struct regex_error : public std::runtime_error
 enum state
 {
     state_none = 0,
-    state_any = 1,
-    state_char = 2,
-    state_repeat = 3,
-    state_dot = 4,
-    state_match_range = 5,
-    state_exclude_range = 6,
-    state_capture_begin = 7,
-    state_capture_end = 8,
-    state_line_start = 9,
-    state_line_end = 10,
-    state_word_boundary = 11,
-    state_not_word_boundary = 12,
-    state_predict_begin = 13,
-    state_predict_end = 14,
-    state_reverse_predict_begin = 15,
-    state_reverse_predict_end = 16,
+    state_branch,
+    state_any,
+    state_char,
+    state_repeat,
+    state_dot,
+    state_match_range,
+    state_exclude_range,
+    state_capture_begin,
+    state_capture_end,
+    state_line_start,
+    state_line_end,
+    state_word_boundary,
+    state_not_word_boundary,
+    state_predict_begin,
+    state_predict_end,
+    state_reverse_predict_begin,
+    state_reverse_predict_end,
 };
 
 struct state_data
 {
+    // Out states range [out_begin, out_end)
+    int out_begin = 0;
+    int out_end = 0;
     union
     {
         // Single char
@@ -53,6 +58,7 @@ struct state_data
             // Repeat begin state
             int repeat_begin;
 
+            // Repeat counter index
             int index;
 
             // Repeat [min, max] times
@@ -69,18 +75,10 @@ struct state_data
         };
         // For state_capture_begin, state_capture_end,
         // state_predict_begin, state_reverse_predict_begin
-        struct
-        {
-            // The begin and the end pair states have the same
-            // capture number, index of capture data = capture_num
-            int capture_num;
-
-            // For state_capture_begin, state_predict_begin and
-            // state_reverse_predict_begin out states range
-            // [out_begin, out_end) of out_states
-            int out_begin;
-            int out_end;
-        };
+        // The begin and the end pair states have the same
+        // capture number, capture_num is the index of capture
+        // data
+        int capture_num;
     };
 };
 
@@ -127,7 +125,7 @@ struct capture
     {
     }
 
-    bool is_captured() const
+    inline bool is_captured() const
     {
         return begin && end;
     }
@@ -140,7 +138,7 @@ struct capture
             return std::string();
     }
 
-    void reset()
+    inline void reset()
     {
         begin = end = nullptr;
     }
@@ -154,34 +152,34 @@ class match_result
     friend class regex;
 public:
     typedef std::vector<capture> captures;
-    typedef typename captures::const_iterator iterator;
+    typedef captures::const_iterator iterator;
 
-    const char * start_pos() const
+    inline const char * start_pos() const
     {
         return captures_[0].begin;
     }
 
-    const char * end_pos() const
+    inline const char * end_pos() const
     {
         return captures_[0].end;
     }
 
-    std::size_t size() const
+    inline std::size_t size() const
     {
         return captures_.size();
     }
 
-    const capture& operator [] (std::size_t index) const
+    inline const capture& operator [] (std::size_t index) const
     {
         return captures_[index];
     }
 
-    iterator begin() const
+    inline iterator begin() const
     {
         return captures_.begin();
     }
 
-    iterator end() const
+    inline iterator end() const
     {
         return captures_.end();
     }
@@ -194,36 +192,40 @@ private:
 // Thread for matching
 struct thread
 {
-    union
-    {
-        // State index
-        int state_index;
-        // In free list
-        thread *next;
-    };
+    // State index
+    int state_index = 0;
+
+    // Previous thread
+    thread *prev = nullptr;
+    // Next thread
+    thread *next = nullptr;
 
     // For predict states
     capture predict;
-
     // For reverse predict states
     capture reverse_predict;
 
-    // Repeat times of all state_repeat
-    std::vector<int> repeat_times;
+    const int repeat_num;
+    const int capture_num;
 
+    // Repeat times of all state_repeat
+    int *repeat_times;
     // All captures' data
-    std::vector<capture> captures;
+    capture *captures;
 
     // Reset thread data
     void reset()
     {
+        state_index = 0;
+        prev = nullptr;
         next = nullptr;
         predict.reset();
         reverse_predict.reset();
-        std::for_each(repeat_times.begin(), repeat_times.end(),
-                [](int &t) { t = 0; });
-        std::for_each(captures.begin(), captures.end(),
-                [](capture &c) { c.reset(); });
+
+        for (int i = 0; i < repeat_num; ++i)
+            repeat_times[i] = 0;
+        for (int i = 0; i < capture_num; ++i)
+            captures[i].reset();
     }
 
     // Inherit data from thread t except state_index
@@ -231,95 +233,208 @@ struct thread
     {
         predict = t->predict;
         reverse_predict = t->reverse_predict;
-        repeat_times = t->repeat_times;
-        captures = t->captures;
+
+        for (int i = 0; i < repeat_num; ++i)
+            repeat_times[i] = t->repeat_times[i];
+        for (int i = 0; i < capture_num; ++i)
+            captures[i] = t->captures[i];
+    }
+
+    // Split the thread from thread list
+    void split()
+    {
+        if (prev)
+            prev->next = next;
+        if (next)
+            next->prev = prev;
+        prev = nullptr;
+        next = nullptr;
+    }
+
+    thread()
+        : repeat_num(0),
+          capture_num(0),
+          repeat_times(nullptr),
+          captures(nullptr)
+    {
     }
 
     thread(int repeat_count, int capture_count)
-        : next(nullptr),
-          repeat_times(repeat_count),
-          captures(capture_count)
+        : repeat_num(repeat_count),
+          capture_num(capture_count),
+          repeat_times(new int[repeat_count]()),
+          captures(new capture[capture_count])
     {
     }
+
+    thread(const thread &) = delete;
+    void operator = (const thread &) = delete;
+
+    ~thread()
+    {
+        delete [] repeat_times;
+        delete [] captures;
+    }
+};
+
+class thread_list
+{
+public:
+    thread_list() { }
+    thread_list(const thread_list &) = delete;
+    void operator = (const thread_list &) = delete;
+
+    ~thread_list()
+    {
+        auto t = head_->next;
+        while (t)
+        {
+            auto tmp = t;
+            t = t->next;
+            delete tmp;
+        }
+    }
+
+    // List is empty or not
+    inline bool empty() const
+    {
+        return head_->next == nullptr;
+    }
+
+    // Return the first thread in the list
+    inline thread * front() const
+    {
+        return head_->next;
+    }
+
+    // Push thread t into the front of list, then the list
+    // own thread t
+    inline void push_front(thread *t)
+    {
+        t->prev = head_;
+        t->next = head_->next;
+        if (head_->next)
+            head_->next->prev = t;
+        head_->next = t;
+    }
+
+    // Pop the first thread of list, then the list does not
+    // own thread t yet
+    inline thread * pop_front()
+    {
+        assert(head_->next);
+        auto t = head_->next;
+        t->split();
+        return t;
+    }
+
+    // Slice all threads of thread_list tl into the front of
+    // the list
+    inline void slice(thread_list &tl)
+    {
+        if (tl.head_->next)
+        {
+            // Pointer to the last node of tl
+            auto pt = tl.head_->next;
+            while (pt->next) pt = pt->next;
+
+            // The last node of tl pointer to the first node
+            // of this
+            pt->next = head_->next;
+            if (head_->next)
+                head_->next->prev = pt;
+
+            // Pointer to the first node of tl
+            head_->next = tl.head_->next;
+            tl.head_->next->prev = head_;
+
+            // Clear tl
+            tl.head_->next = nullptr;
+        }
+    }
+
+    // Swap with thread_list tl
+    inline void swap(thread_list &tl)
+    {
+        std::swap(head_->next, tl.head_->next);
+        if (head_->next)
+            head_->next->prev = head_;
+        if (tl.head_->next)
+            tl.head_->next->prev = tl.head_;
+    }
+
+    // Create thread
+    inline static thread * create(int repeat_count, int capture_count)
+    {
+        return new thread(repeat_count, capture_count);
+    }
+
+private:
+    thread sentry_;
+    thread *head_ = &sentry_;
 };
 
 // Context data for matching
 struct context
 {
     // Current match threads
-    std::vector<thread *> threads;
-
+    thread_list tlist;
     // Next match threads
-    std::vector<thread *> next_threads;
-
+    thread_list next_tlist;
     // Pending threads for epsilon_extend
-    std::vector<thread *> pending_threads;
-
-    // Pending states for epsilon_extend
-    std::vector<std::pair<int, thread *>> pending_states;
-
-    // Free thread list for reuse
-    thread *free_thread_list = nullptr;
-
+    thread_list pending_tlist;
+    // Freed thread list for reuse
+    thread_list free_tlist;
     // Current running thread
     thread *current_thread = nullptr;
 
     // Number of repeat states
     const int repeat_count;
-
     // Number of capture states
     const int capture_count;
 
+    // Pending states for epsilon_extend
+    std::vector<std::pair<int, thread *>> pending_states;
+
     // Epsilon DFS data for epsilon_extend
-    digraph_dfs epsilon_dfs;
+    const digraph &epsilon;
+    bitmap epsilon_bits;
 
     // Search range [sbegin, send)
     const char *sbegin;
     const char *send;
-
     // Current pos
     const char *scur = nullptr;
 
     // Has accepted or not
     bool accept = false;
-
     // Captures when accepted
     std::vector<capture> accept_captures;
 
     // Alloc a thread
-    thread *alloc_thread()
+    inline thread * alloc_thread(bool reset = false)
     {
-        if (free_thread_list)
+        if (!free_tlist.empty())
         {
-            auto t = free_thread_list;
-            free_thread_list = free_thread_list->next;
+            auto t = free_tlist.pop_front();
+            if (reset) t->reset();
             return t;
         }
 
-        return new thread(repeat_count, capture_count);
+        return thread_list::create(repeat_count, capture_count);
     }
 
-    // Free a thread
-    void free_thread(thread *t)
+    // Free thread list
+    inline void free_thread_list(thread_list &tl)
     {
-        t->reset();
-        t->next = free_thread_list;
-        free_thread_list = t;
-    }
-
-    // Free threads
-    void free_threads(std::vector<thread *> &ts)
-    {
-        for (auto t : ts)
-            free_thread(t);
-        ts.clear();
+        free_tlist.slice(tl);
     }
 
     // Clone thread t and set state index, then put it into pending_threads
     thread *clone_to_pending_threads(const thread *t, int state_index)
     {
-        auto tn = alloc_thread();
-        pending_threads.push_back(tn);
+        auto tn = alloc_thread(t == nullptr);
+        pending_tlist.push_front(tn);
         tn->state_index = state_index;
 
         if (t) tn->inherit_from(t);
@@ -329,39 +444,31 @@ struct context
     // DFS epsilon digraph, pending all states into pending_states
     void dfs_to_pending_states(int c, thread *t)
     {
-        epsilon_dfs.dfs(c,
-                [&](int v) {
-                    pending_states.push_back({ v, t });
-                });
+        if (!epsilon_bits.is_set(c))
+        {
+            epsilon_bits.set(c);
+            pending_states.emplace_back(c, t);
+
+            auto it = epsilon.edge_begin(c);
+            auto end = epsilon.edge_end(c);
+            for (; it != end; ++it)
+                dfs_to_pending_states(*it, t);
+        }
     }
 
     context(const states_data &sd,
-            const digraph &epsilon,
+            const digraph &ep,
             const char *begin,
             const char *end)
         : repeat_count(sd.repeat_count),
           capture_count(sd.capture_count),
-          epsilon_dfs(epsilon),
+          epsilon(ep), epsilon_bits(ep.vertexes()),
           sbegin(begin), send(end)
     {
     }
 
-    ~context()
-    {
-        std::for_each(threads.begin(), threads.end(),
-                [](thread *t) { delete t; });
-        std::for_each(next_threads.begin(), next_threads.end(),
-                [](thread *t) { delete t; });
-        std::for_each(pending_threads.begin(), pending_threads.end(),
-                [](thread *t) { delete t; });
-
-        while (free_thread_list)
-        {
-            auto t = free_thread_list;
-            free_thread_list = free_thread_list->next;
-            delete t;
-        }
-    }
+    context(const context &) = delete;
+    void operator = (const context &) = delete;
 };
 
 class regex
@@ -370,7 +477,7 @@ class regex
 public:
     explicit regex(const std::string &re)
         : re_(padding_ + re),
-          states_(re_.size() + 1),
+          states_(re_.size() + 1, state_none),
           states_data_(re_.size() + 1),
           epsilon_(re_.size() + 1),
           accept_state_(re_.size())
@@ -411,11 +518,15 @@ private:
         context ctx(states_data_, epsilon_, begin, end);
 
         // Init threads
-        epsilon_extend(search ? state_of_search_begin_ : state_of_match_begin_,
-                ctx, ctx.threads);
-
-        for (auto c : beginning_)
-            epsilon_extend(c, ctx, ctx.threads);
+        if (search)
+        {
+            epsilon_extend(state_of_search_begin_0, ctx, ctx.tlist, nullptr);
+            epsilon_extend(state_of_search_begin_1, ctx, ctx.tlist, nullptr);
+        }
+        else
+        {
+            epsilon_extend(state_of_match_begin_, ctx, ctx.tlist, nullptr);
+        }
 
         // Iterate input
         for (ctx.scur = ctx.sbegin;
@@ -424,10 +535,13 @@ private:
         {
             ctx.accept = false;
 
-            for (auto t : ctx.threads)
+            for (auto t = ctx.tlist.front(); t;)
             {
                 ctx.current_thread = t;
                 auto c = t->state_index;
+                // Move to next first, because move_to_next may split
+                // the t from the tlist
+                t = t->next;
                 switch (states_[c])
                 {
                     case state_any:
@@ -454,8 +568,8 @@ private:
                 }
             }
 
-            ctx.threads.swap(ctx.next_threads);
-            ctx.free_threads(ctx.next_threads);
+            ctx.tlist.swap(ctx.next_tlist);
+            ctx.free_thread_list(ctx.next_tlist);
         }
 
         if (match_res)
@@ -486,17 +600,27 @@ private:
 
     void move_to_next(int v, context &ctx) const
     {
-        epsilon_extend(v + 1, ctx, ctx.next_threads);
+        auto out_it = states_data_.data[v].out_begin;
+        auto out_end = states_data_.data[v].out_end;
+
+        while (out_it < out_end)
+        {
+            auto n = states_data_.out_states[out_it];
+            auto tn = ctx.clone_to_pending_threads(ctx.current_thread, v);
+            epsilon_extend(n, ctx, ctx.next_tlist, tn);
+            ++out_it;
+        }
+
+        epsilon_extend(v + 1, ctx, ctx.next_tlist, ctx.current_thread);
     }
 
-    void epsilon_extend(int v, context &ctx, std::vector<thread *> &threads) const
+    void epsilon_extend(int v, context &ctx, thread_list &tlist, thread *from) const
     {
         auto it = ctx.pending_states.size();
-        ctx.epsilon_dfs.clear_mark();
-        ctx.dfs_to_pending_states(v, ctx.current_thread);
+        ctx.epsilon_bits.clear();
+        ctx.dfs_to_pending_states(v, from);
         auto end = ctx.pending_states.size();
 
-        ctx.epsilon_dfs.clear_mark();
         while (it < end)
         {
             for (; it < end; ++it)
@@ -509,17 +633,39 @@ private:
                     case state_none:
                         break;
 
+                    case state_branch:
+                    {
+                        if (!t)
+                        {
+                            t = ctx.alloc_thread(true);
+                            ctx.pending_tlist.push_front(t);
+                        }
+                        t->state_index = c;
+                        branch_to_next(ctx, c, t);
+                        break;
+                    }
+
                     case state_repeat:
                     {
                         assert(t);
                         // Increase repeat times
                         auto index = states_data_.data[c].index;
                         auto times = t->repeat_times[index] + 1;
+                        auto need_repeat = times < states_data_.data[c].max;
+                        auto need_move_next = times >= states_data_.data[c].min &&
+                            times <= states_data_.data[c].max;
 
                         // Less than max, repeat it again
-                        if (times < states_data_.data[c].max)
+                        if (need_repeat)
                         {
-                            auto tb = ctx.clone_to_pending_threads(t, c);
+                            thread *tb = nullptr;
+                            if (need_move_next)
+                                tb = ctx.clone_to_pending_threads(t, c);
+                            else
+                            {
+                                t->state_index = c;
+                                tb = t;
+                            }
                             tb->repeat_times[index] = times;
 
                             // Clear all repeat states counter in range [b, c)
@@ -534,12 +680,11 @@ private:
                         }
 
                         // Move to next state when repeat times in range [min, max]
-                        if (times >= states_data_.data[c].min &&
-                            times <= states_data_.data[c].max)
+                        if (need_move_next)
                         {
-                            auto tn = ctx.clone_to_pending_threads(t, c);
-                            tn->repeat_times[index] = times;
-                            ctx.dfs_to_pending_states(c + 1, tn);
+                            t->state_index = c;
+                            t->repeat_times[index] = times;
+                            branch_to_next(ctx, c, t);
                         }
                         break;
                     }
@@ -548,68 +693,68 @@ private:
                     case state_predict_begin:
                     case state_reverse_predict_begin:
                     {
-                        auto tn = ctx.clone_to_pending_threads(t, c);
+                        if (!t)
+                        {
+                            t = ctx.alloc_thread(true);
+                            ctx.pending_tlist.push_front(t);
+                        }
+                        t->state_index = c;
                         if (s == state_capture_begin)
                         {
                             // Update capture data
                             auto index = states_data_.data[c].capture_num;
-                            tn->captures[index].begin =
+                            t->captures[index].begin =
                                 ctx.scur ? ctx.scur + 1 : ctx.sbegin;
                         }
                         else if (s == state_predict_begin)
                         {
                             // Update predict
-                            tn->predict.begin =
+                            t->predict.begin =
                                 ctx.scur ? ctx.scur + 1 : ctx.sbegin;
                         }
                         else
                         {
                             // Update reverse predict
-                            tn->reverse_predict.begin =
+                            t->reverse_predict.begin =
                                 ctx.scur ? ctx.scur + 1 : ctx.sbegin;
                         }
 
-                        // Add all out states to pending_states
-                        ctx.dfs_to_pending_states(c + 1, tn);
-                        for (auto i = states_data_.data[c].out_begin;
-                                i < states_data_.data[c].out_end; ++i)
-                        {
-                            ctx.dfs_to_pending_states(states_data_.out_states[i], tn);
-                        }
+                        branch_to_next(ctx, c, t);
                         break;
                     }
 
                     case state_capture_end:
                     {
                         assert(t);
-                        auto tn = ctx.clone_to_pending_threads(t, c);
+                        auto from_state = states_[t->state_index];
+                        t->state_index = c;
 
                         // Update capture data
                         auto index = states_data_.data[c].capture_num;
-                        if (states_[t->state_index] == state_capture_begin)
-                            tn->captures[index].end = t->captures[index].begin;
+                        if (from_state == state_capture_begin)
+                            t->captures[index].end = t->captures[index].begin;
                         else
-                            tn->captures[index].end = ctx.scur + 1;
+                            t->captures[index].end = ctx.scur + 1;
 
                         // The accept_state_ is last state_capture_end.
                         // If c is accept_state_, then do not move to
                         // next state
                         if (c != accept_state_)
                         {
-                            ctx.dfs_to_pending_states(c + 1, tn);
+                            branch_to_next(ctx, c, t);
                         }
                         else if (!ctx.accept)
                         {
                             ctx.accept = true;
-                            ctx.accept_captures = tn->captures;
+                            ctx.accept_captures.assign(t->captures, t->captures + t->capture_num);
                             // Set predict begin to accept_captures[0].end
                             // when predict success
-                            if (tn->predict.begin)
-                                ctx.accept_captures[0].end = tn->predict.begin;
+                            if (t->predict.begin)
+                                ctx.accept_captures[0].end = t->predict.begin;
                             // Set reverse predict end to accept_captures[0].begin
                             // when reverse predict success
-                            if (tn->reverse_predict.end)
-                                ctx.accept_captures[0].begin = tn->reverse_predict.end;
+                            if (t->reverse_predict.end)
+                                ctx.accept_captures[0].begin = t->reverse_predict.end;
                         }
                         break;
                     }
@@ -617,37 +762,39 @@ private:
                     case state_predict_end:
                     {
                         assert(t);
-                        auto tn = ctx.clone_to_pending_threads(t, c);
+                        auto from_state = states_[t->state_index];
+                        t->state_index = c;
 
                         // Update predict data
-                        if (states_[t->state_index] == state_predict_begin)
-                            tn->predict.end = t->predict.begin;
+                        if (from_state == state_predict_begin)
+                            t->predict.end = t->predict.begin;
                         else
-                            tn->predict.end = ctx.scur + 1;
+                            t->predict.end = ctx.scur + 1;
 
-                        ctx.dfs_to_pending_states(c + 1, tn);
+                        branch_to_next(ctx, c, t);
                         break;
                     }
 
                     case state_reverse_predict_end:
                     {
                         assert(t);
-                        auto tn = ctx.clone_to_pending_threads(t, c);
+                        auto from_state = states_[t->state_index];
+                        t->state_index = c;
 
                         // Update reverse predict data
-                        if (states_[t->state_index] == state_reverse_predict_begin)
-                            tn->reverse_predict.end = t->reverse_predict.begin;
+                        if (from_state == state_reverse_predict_begin)
+                            t->reverse_predict.end = t->reverse_predict.begin;
                         else
-                            tn->reverse_predict.end = ctx.scur + 1;
+                            t->reverse_predict.end = ctx.scur + 1;
 
-                        ctx.dfs_to_pending_states(c + 1, tn);
+                        branch_to_next(ctx, c, t);
                         break;
                     }
 
                     case state_line_start:
                     {
                         if (!ctx.scur || *ctx.scur == '\n')
-                            ctx.dfs_to_pending_states(c + 1, t);
+                            branch_to_next(ctx, c, t);
                         break;
                     }
 
@@ -655,7 +802,7 @@ private:
                     {
                         if ((!ctx.scur && ctx.sbegin == ctx.send) ||
                             (ctx.scur && (ctx.scur + 1 == ctx.send || ctx.scur[1] == '\n')))
-                            ctx.dfs_to_pending_states(c + 1, t);
+                            branch_to_next(ctx, c, t);
                         break;
                     }
 
@@ -664,7 +811,7 @@ private:
                         auto pc = ctx.scur;
                         if (pc && (pc + 1 == ctx.send ||
                                    isspace(static_cast<unsigned char>(pc[1]))))
-                            ctx.dfs_to_pending_states(c + 1, t);
+                            branch_to_next(ctx, c, t);
                         break;
                     }
 
@@ -673,17 +820,18 @@ private:
                         auto pc = ctx.scur;
                         if (pc && !(pc + 1 == ctx.send ||
                                     isspace(static_cast<unsigned char>(pc[1]))))
-                            ctx.dfs_to_pending_states(c + 1, t);
+                            branch_to_next(ctx, c, t);
                         break;
                     }
 
                     default:
                     {
-                        auto tn = ctx.alloc_thread();
-                        threads.push_back(tn);
-                        tn->state_index = c;
                         if (t)
-                            tn->inherit_from(t);
+                            t->split();
+                        else
+                            t = ctx.alloc_thread(true);
+                        t->state_index = c;
+                        tlist.push_front(t);
                         break;
                     }
                 }
@@ -693,7 +841,19 @@ private:
         }
 
         ctx.pending_states.clear();
-        ctx.free_threads(ctx.pending_threads);
+        ctx.free_thread_list(ctx.pending_tlist);
+    }
+
+    void branch_to_next(context &ctx, int c, thread *t) const
+    {
+        // Branch all out states
+        ctx.dfs_to_pending_states(c + 1, t);
+        for (auto i = states_data_.data[c].out_begin;
+                i < states_data_.data[c].out_end; ++i)
+        {
+            auto tn = ctx.clone_to_pending_threads(t, c);
+            ctx.dfs_to_pending_states(states_data_.out_states[i], tn);
+        }
     }
 
     void prepare_padding_states()
@@ -706,16 +866,14 @@ private:
         add_repeat_state(1, 0, 0);
         add_capture_begin(2);
         add_capture_end(states_.size() - 1, 2);
-
-        // Add padding_ epsilon edges
-        epsilon_.add_edge(0, 2);
     }
 
     void construct_states()
     {
         std::stack<int> meta;
         std::stack<int> lps;
-        std::vector<std::pair<int, int>> capture_outs;
+        std::vector<std::pair<int, int>> out_edges;
+        std::vector<std::pair<int, int>> repeat0_edges;
 
         int size = re_.size();
         int i = padding_size_;
@@ -737,17 +895,9 @@ private:
                     if (i < size - 1)
                     {
                         if (!lps.empty())
-                        {
-                            auto s = states_[lps.top()];
-                            if (s == state_capture_begin ||
-                                s == state_predict_begin ||
-                                s == state_reverse_predict_begin)
-                                capture_outs.push_back({ lps.top(), i + 1 });
-                            else
-                                epsilon_.add_edge(lps.top(), i + 1);
-                        }
+                            out_edges.push_back({ lps.top(), i + 1 });
                         else
-                            beginning_.push_back(i + 1);
+                            out_edges.push_back({ 2, i + 1 });
                     }
                     break;
                 case '.':
@@ -771,7 +921,7 @@ private:
             }
 
             if (i < size - 1)
-                i = add_repeat_state(i, lp);
+                i = add_repeat_state(i, lp, out_edges, repeat0_edges);
 
             ++i;
         }
@@ -790,11 +940,11 @@ private:
 
         // Sort it, then all state_capture_begin, state_predict_begin,
         // state_reverse_predict_begin states grouped
-        std::sort(capture_outs.begin(), capture_outs.end());
+        std::sort(out_edges.begin(), out_edges.end());
 
         // Prepare out states
         int s = -1;
-        for (const auto &p : capture_outs)
+        for (const auto &p : out_edges)
         {
             if (p.first != s)
             {
@@ -802,6 +952,14 @@ private:
                     states_data_.data[s].out_end = states_data_.out_states.size();
                 s = p.first;
                 states_data_.data[s].out_begin = states_data_.out_states.size();
+
+                // If state_none has out edges, change the state to state_branch
+                if (states_[s] == state_none)
+                {
+                    states_[s] = state_branch;
+                    // state_branch will move to next, so remove the epsilon edge
+                    epsilon_.remove_edge(s, s + 1);
+                }
             }
 
             states_data_.out_states.push_back(p.second);
@@ -818,7 +976,8 @@ private:
             if (re_[i + 2] == ':')
             {
                 lps.push(i);
-                epsilon_.add_edge(i, i + 1);
+                states_[i] = state_branch;
+                // No epsilon edge from '(' to '?'
                 epsilon_.add_edge(i + 1, i + 2);
                 epsilon_.add_edge(i + 2, i + 3);
                 return i + 2;
@@ -862,17 +1021,14 @@ private:
             switch (s)
             {
                 case state_capture_begin:
-                    // Do not add epsilon edge to next state
                     add_capture_end(i, lp);
                     break;
 
                 case state_predict_begin:
-                    // Do not add epsilon edge to next state
                     states_[i] = state_predict_end;
                     break;
 
                 case state_reverse_predict_begin:
-                    // Do not add epsilon edge to next state
                     states_[i] = state_reverse_predict_end;
                     break;
 
@@ -891,6 +1047,38 @@ private:
         else throw regex_error("parentheses () not blanced");
     }
 
+    void add_repeat0_out_edges(int begin, int repeat_end,
+            std::vector<std::pair<int, int>> &out_edges,
+            std::vector<std::pair<int, int>> &repeat0_edges)
+    {
+        // Extend out edges when there have more than one zero-min repeat
+        // states are adjacent. e.g.
+        // "(.*.*.*)"
+        //  ^  ^ ^ ^
+        //  |  | | |
+        //  0  3 5 7
+        // state 0 out edges: 0->3 0->5 0->7
+        // state 2 out edges: 2->5 2->7
+        // state 4 out edges: 4->7
+        auto from_edges = std::equal_range(repeat0_edges.begin(),
+                repeat0_edges.end(), std::make_pair(0, begin),
+                [](const std::pair<int, int> &l,
+                   const std::pair<int, int> &r) {
+                    return l.second < r.second;
+                });
+
+        auto it = out_edges.size();
+
+        for (; from_edges.first != from_edges.second; ++from_edges.first)
+            out_edges.push_back({ from_edges.first->first, repeat_end });
+        out_edges.push_back({ begin - 1, repeat_end });
+
+        auto end = out_edges.size();
+
+        for (; it < end; ++it)
+            repeat0_edges.push_back(out_edges[it]);
+    }
+
     void add_repeat_state(int i, int begin,
             int min, int max = std::numeric_limits<int>::max())
     {
@@ -901,14 +1089,17 @@ private:
         states_data_.data[i].repeat_begin = begin;
     }
 
-    int add_repeat_state(int i, int begin)
+    int add_repeat_state(int i, int begin,
+            std::vector<std::pair<int, int>> &out_edges,
+            std::vector<std::pair<int, int>> &repeat0_edges)
     {
         // If next char is '*', '+', '?', '{',
         // add repeat state and epsilon edges
+        assert(begin > 0);
         if (re_[i + 1] == '*')
         {
             add_repeat_state(i + 1, begin, 0);
-            epsilon_.add_edge(begin, i + 2);
+            add_repeat0_out_edges(begin, i + 2, out_edges, repeat0_edges);
             ++i;
         }
         else if (re_[i + 1] == '+')
@@ -919,7 +1110,7 @@ private:
         else if (re_[i + 1] == '?')
         {
             add_repeat_state(i + 1, begin, 0, 1);
-            epsilon_.add_edge(begin, i + 2);
+            add_repeat0_out_edges(begin, i + 2, out_edges, repeat0_edges);
             ++i;
         }
         else if (re_[i + 1] == '{')
@@ -958,8 +1149,9 @@ private:
                 add_repeat_state(lb, begin, min, max);
             }
 
-            // Add epsilon edge, skip repeat state when min <= 0
-            if (min <= 0) epsilon_.add_edge(begin, rb + 1);
+            // Add out edge, skip repeat state when min <= 0
+            if (min <= 0)
+                add_repeat0_out_edges(begin, rb + 1, out_edges, repeat0_edges);
 
             // Add epsilon edges, from lb + 1 to rb
             ++lb;
@@ -1163,9 +1355,10 @@ private:
 
     // Padding size = 3
     static constexpr const char *padding_ = "   ";
-    static constexpr int padding_size_ = 3;
-    static constexpr int state_of_match_begin_ = 2;
-    static constexpr int state_of_search_begin_ = 0;
+    static const int padding_size_ = 3;
+    static const int state_of_match_begin_ = 2;
+    static const int state_of_search_begin_0 = 0;
+    static const int state_of_search_begin_1 = 2;
 
     // Regex string
     std::string re_;
@@ -1178,8 +1371,6 @@ private:
     states_data states_data_;
     // Epsilon digraph
     digraph epsilon_;
-    // Beginning states
-    std::vector<int> beginning_;
     // Accept state
     const int accept_state_;
 };
@@ -1251,6 +1442,29 @@ inline bool regex_search(const std::string &re,
 {
     regex r(re);
     return regex_search(r, begin, end, match_res);
+}
+
+inline auto regex_search_all(const regex &re,
+        const char *begin, const char *end) -> std::vector<match_result>
+{
+    std::vector<match_result> results;
+
+    match_result match_res;
+    if (regex_search(re, begin, end, &match_res))
+    {
+        results.push_back(match_res);
+        while (regex_search(re, match_res.end_pos(), end, &match_res))
+            results.push_back(match_res);
+    }
+
+    return results;
+}
+
+inline auto regex_search_all(const std::string &re,
+        const char *begin, const char *end) -> std::vector<match_result>
+{
+    regex r(re);
+    return regex_search_all(r, begin, end);
 }
 
 } // namespace skl

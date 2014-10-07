@@ -76,6 +76,8 @@ TEST_CASE(regex6)
     EXPECT_TRUE(regex_match("a?", "a"));
     EXPECT_TRUE(!regex_match("a?", "aa"));
 
+    EXPECT_TRUE(regex_match("a?a?", ""));
+    EXPECT_TRUE(regex_match("a?a*", ""));
     EXPECT_TRUE(regex_match("(a?)", "a"));
     EXPECT_TRUE(regex_match("(a?)*", "a"));
     EXPECT_TRUE(regex_match("(a?)+", "a"));
@@ -134,7 +136,19 @@ TEST_CASE(regex8)
     EXPECT_TRUE(regex_match("a{1,2}", "aa"));
     EXPECT_TRUE(!regex_match("a{1,2}", "aaa"));
 
+    EXPECT_TRUE(regex_match("a{0,}a?", ""));
+    EXPECT_TRUE(regex_match("a{0,}a*", ""));
+    EXPECT_TRUE(regex_match("a{0,}a{0,}", ""));
     EXPECT_TRUE(regex_match("(a{2}){3}", "aaaaaa"));
+
+    EXPECT_TRUE(regex_match("a{0,}b?c*", ""));
+    EXPECT_TRUE(regex_match("a{0,}b?c*", "a"));
+    EXPECT_TRUE(regex_match("a{0,}b?c*", "b"));
+    EXPECT_TRUE(regex_match("a{0,}b?c*", "c"));
+    EXPECT_TRUE(regex_match("a{0,}b?c*", "ab"));
+    EXPECT_TRUE(regex_match("a{0,}b?c*", "ac"));
+    EXPECT_TRUE(regex_match("a{0,}b?c*", "bc"));
+    EXPECT_TRUE(regex_match("a{0,}b?c*", "abc"));
 }
 
 TEST_CASE(regex9)
