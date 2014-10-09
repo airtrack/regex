@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <limits>
 #include <map>
+#include <memory>
 #include <stack>
 #include <string>
 #include <stdexcept>
@@ -411,6 +412,21 @@ struct context
     // Captures when accepted
     std::vector<capture> accept_captures;
 
+    void reset(const char *begin, const char *end)
+    {
+        free_thread_list(tlist);
+        free_thread_list(next_tlist);
+        free_thread_list(pending_tlist);
+        current_thread = nullptr;
+        pending_states.clear();
+
+        sbegin = begin;
+        send = end;
+        scur = nullptr;
+        accept = false;
+        accept_captures.clear();
+    }
+
     // Alloc a thread
     inline thread * alloc_thread(bool reset = false)
     {
@@ -515,7 +531,11 @@ private:
     bool match_search(const char *begin, const char *end,
             match_result *match_res, bool search) const
     {
-        context ctx(states_data_, epsilon_, begin, end);
+        if (context_)
+            context_->reset(begin, end);
+        else
+            context_.reset(new context(states_data_, epsilon_, begin, end));
+        context &ctx = *context_;
 
         // Init threads
         if (search)
@@ -1373,6 +1393,8 @@ private:
     digraph epsilon_;
     // Accept state
     const int accept_state_;
+    // Context data
+    mutable std::unique_ptr<context> context_;
 };
 
 // static regex::char_classes_
