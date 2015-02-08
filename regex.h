@@ -541,59 +541,27 @@ private:
                                        epsilon_extend_states, begin, end));
         context &ctx = *context_;
 
-        // Init threads
         if (search)
         {
             epsilon_extend(state_of_search_begin_0, ctx, ctx.tlist, nullptr);
             epsilon_extend(state_of_search_begin_1, ctx, ctx.tlist, nullptr);
+
+            for (ctx.scur = ctx.sbegin;
+                 !ctx.accept && ctx.scur != ctx.send;
+                 ++ctx.scur)
+            {
+                run_threads(ctx);
+            }
         }
         else
         {
             epsilon_extend(state_of_match_begin_, ctx, ctx.tlist, nullptr);
-        }
 
-        // Iterate input
-        for (ctx.scur = ctx.sbegin;
-                search ? !ctx.accept && ctx.scur != ctx.send : ctx.scur != ctx.send;
-                ++ctx.scur)
-        {
-            ctx.accept = false;
-
-            for (auto t = ctx.tlist.front(); t;)
+            for (ctx.scur = ctx.sbegin; ctx.scur != ctx.send; ++ctx.scur)
             {
-                ctx.current_thread = t;
-                auto c = t->state_index;
-                // Move to next first, because move_to_next may split
-                // the t from the tlist
-                t = t->next;
-                switch (states_[c])
-                {
-                    case state_any:
-                        move_to_next(c, ctx);
-                        break;
-                    case state_char:
-                        if (static_cast<unsigned char>(*ctx.scur) == states_data_.data[c].c)
-                            move_to_next(c, ctx);
-                        break;
-                    case state_dot:
-                        if (*ctx.scur != '\n')
-                            move_to_next(c, ctx);
-                        break;
-                    case state_match_range:
-                        if (match_range(*ctx.scur, c))
-                            move_to_next(c, ctx);
-                        break;
-                    case state_exclude_range:
-                        if (!match_range(*ctx.scur, c))
-                            move_to_next(c, ctx);
-                        break;
-                    default:
-                        break;
-                }
+                ctx.accept = false;
+                run_threads(ctx);
             }
-
-            ctx.tlist.swap(ctx.next_tlist);
-            ctx.free_thread_list(ctx.next_tlist);
         }
 
         if (match_res)
@@ -605,6 +573,45 @@ private:
         }
 
         return ctx.accept;
+    }
+
+    void run_threads(context &ctx) const
+    {
+        for (auto t = ctx.tlist.front(); t;)
+        {
+            ctx.current_thread = t;
+            auto c = t->state_index;
+            // Move to next first, because move_to_next may split
+            // the t from the tlist
+            t = t->next;
+            switch (states_[c])
+            {
+            case state_any:
+                move_to_next(c, ctx);
+                break;
+            case state_char:
+                if (static_cast<unsigned char>(*ctx.scur) == states_data_.data[c].c)
+                    move_to_next(c, ctx);
+                break;
+            case state_dot:
+                if (*ctx.scur != '\n')
+                    move_to_next(c, ctx);
+                break;
+            case state_match_range:
+                if (match_range(*ctx.scur, c))
+                    move_to_next(c, ctx);
+                break;
+            case state_exclude_range:
+                if (!match_range(*ctx.scur, c))
+                    move_to_next(c, ctx);
+                break;
+            default:
+                break;
+            }
+        }
+
+        ctx.tlist.swap(ctx.next_tlist);
+        ctx.free_thread_list(ctx.next_tlist);
     }
 
     bool match_range(unsigned char c, int s) const
