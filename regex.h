@@ -375,6 +375,8 @@ private:
     thread *head_ = &sentry_;
 };
 
+typedef std::vector<std::vector<int>> vertex_extend_states;
+
 // Context data for matching
 struct context
 {
@@ -397,8 +399,8 @@ struct context
     // Pending states for epsilon_extend
     std::vector<std::pair<int, thread *>> pending_states;
 
-    // Epsilon DFS data for epsilon_extend
-    const digraph &epsilon;
+    // For epsilon extend pending states
+    const vertex_extend_states &epsilon_extend_states;
     bitmap epsilon_bits;
 
     // Search range [sbegin, send)
@@ -457,28 +459,28 @@ struct context
         return tn;
     }
 
-    // DFS epsilon digraph, pending all states into pending_states
-    void dfs_to_pending_states(int c, thread *t)
+    // Pending all epsilon extend states into pending_states
+    void pending_epsilon_extend_states(int c, thread *t)
     {
-        if (!epsilon_bits.is_set(c))
+        const std::vector<int> &indices = epsilon_extend_states[c];
+        for (auto v : indices)
         {
-            epsilon_bits.set(c);
-            pending_states.emplace_back(c, t);
-
-            auto it = epsilon.edge_begin(c);
-            auto end = epsilon.edge_end(c);
-            for (; it != end; ++it)
-                dfs_to_pending_states(*it, t);
+            if (!epsilon_bits.is_set(v))
+            {
+                epsilon_bits.set(v);
+                pending_states.emplace_back(v, t);
+            }
         }
     }
 
     context(const states_data &sd,
-            const digraph &ep,
+            const vertex_extend_states &ees,
             const char *begin,
             const char *end)
         : repeat_count(sd.repeat_count),
           capture_count(sd.capture_count),
-          epsilon(ep), epsilon_bits(ep.vertexes()),
+          epsilon_extend_states(ees),
+          epsilon_bits(ees.size()),
           sbegin(begin), send(end)
     {
     }
@@ -500,6 +502,7 @@ public:
     {
         prepare_padding_states();
         construct_states();
+        construct_epsilon_extend();
     }
 
     regex(const regex&) = delete;
@@ -534,7 +537,8 @@ private:
         if (context_)
             context_->reset(begin, end);
         else
-            context_.reset(new context(states_data_, epsilon_, begin, end));
+            context_.reset(new context(states_data_,
+                                       epsilon_extend_states, begin, end));
         context &ctx = *context_;
 
         // Init threads
@@ -638,7 +642,7 @@ private:
     {
         auto it = ctx.pending_states.size();
         ctx.epsilon_bits.clear();
-        ctx.dfs_to_pending_states(v, from);
+        ctx.pending_epsilon_extend_states(v, from);
         auto end = ctx.pending_states.size();
 
         while (it < end)
@@ -696,7 +700,7 @@ private:
                                     tb->repeat_times[states_data_.data[i].index] = 0;
                             }
 
-                            ctx.dfs_to_pending_states(b, tb);
+                            ctx.pending_epsilon_extend_states(b, tb);
                         }
 
                         // Move to next state when repeat times in range [min, max]
@@ -867,12 +871,12 @@ private:
     void branch_to_next(context &ctx, int c, thread *t) const
     {
         // Branch all out states
-        ctx.dfs_to_pending_states(c + 1, t);
+        ctx.pending_epsilon_extend_states(c + 1, t);
         for (auto i = states_data_.data[c].out_begin;
                 i < states_data_.data[c].out_end; ++i)
         {
             auto tn = ctx.clone_to_pending_threads(t, c);
-            ctx.dfs_to_pending_states(states_data_.out_states[i], tn);
+            ctx.pending_epsilon_extend_states(states_data_.out_states[i], tn);
         }
     }
 
@@ -986,6 +990,33 @@ private:
         }
         if (s != -1)
             states_data_.data[s].out_end = states_data_.out_states.size();
+    }
+
+    void construct_epsilon_extend()
+    {
+        auto vertexes = epsilon_.vertexes();
+        epsilon_extend_states.resize(vertexes);
+
+        bitmap epsilon_bits(vertexes);
+        for (std::size_t i = 0; i < vertexes; ++i)
+        {
+            epsilon_bits.clear();
+            dfs_epsilon_extend(epsilon_extend_states[i], epsilon_bits, i);
+        }
+    }
+
+    void dfs_epsilon_extend(std::vector<int> &indices, bitmap &epsilon_bits, int v)
+    {
+        if (!epsilon_bits.is_set(v))
+        {
+            epsilon_bits.set(v);
+            indices.push_back(v);
+
+            auto it = epsilon_.edge_begin(v);
+            auto end = epsilon_.edge_end(v);
+            for (; it != end; ++it)
+                dfs_epsilon_extend(indices, epsilon_bits, *it);
+        }
     }
 
     int add_left_parentheses(int i, std::stack<int> &lps)
@@ -1391,6 +1422,8 @@ private:
     states_data states_data_;
     // Epsilon digraph
     digraph epsilon_;
+    // Epsilon extend states
+    vertex_extend_states epsilon_extend_states;
     // Accept state
     const int accept_state_;
     // Context data
