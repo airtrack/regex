@@ -139,6 +139,7 @@ TEST_CASE(regex8)
     EXPECT_TRUE(regex_match("a{0,}a?", ""));
     EXPECT_TRUE(regex_match("a{0,}a*", ""));
     EXPECT_TRUE(regex_match("a{0,}a{0,}", ""));
+    EXPECT_TRUE(regex_match("(aa?){2}", "aa"));
     EXPECT_TRUE(regex_match("(a{2}){3}", "aaaaaa"));
 
     EXPECT_TRUE(regex_match("a{0,}b?c*", ""));
