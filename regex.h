@@ -26,7 +26,6 @@ enum state
 {
     state_none = 0,
     state_branch,
-    state_any,
     state_char,
     state_repeat,
     state_dot,
@@ -595,9 +594,6 @@ private:
             t = t->next;
             switch (states_[c])
             {
-            case state_any:
-                move_to_next(c, ctx);
-                break;
             case state_char:
                 if (static_cast<unsigned char>(*ctx.scur) == states_data_.data[c].c)
                     move_to_next(c, ctx);
