@@ -406,8 +406,10 @@ struct context
     // Search range [sbegin, send)
     const char *sbegin;
     const char *send;
-    // Current pos
-    const char *scur = nullptr;
+    // Current search start position
+    const char *spos;
+    // Current position
+    const char *scur;
 
     // Has accepted or not
     bool accept = false;
@@ -424,7 +426,8 @@ struct context
 
         sbegin = begin;
         send = end;
-        scur = nullptr;
+        spos = begin;
+        scur = begin;
         accept = false;
         accept_captures.clear();
     }
@@ -481,7 +484,8 @@ struct context
           capture_count(sd.capture_count),
           epsilon_extend_states(ees),
           epsilon_bits(ees.size()),
-          sbegin(begin), send(end)
+          sbegin(begin), send(end),
+          spos(begin), scur(begin)
     {
     }
 
@@ -494,7 +498,7 @@ class regex
     typedef std::map<std::string, std::vector<char_range>> char_classes;
 public:
     explicit regex(const std::string &re)
-        : re_(padding_ + re),
+        : re_(std::string(padding_size_, ' ') + re),
           states_(re_.size() + 1, state_none),
           states_data_(re_.size() + 1),
           epsilon_(re_.size() + 1),
@@ -543,21 +547,26 @@ private:
 
         if (search)
         {
-            epsilon_extend(state_of_search_begin_0, ctx, ctx.tlist, nullptr);
-            epsilon_extend(state_of_search_begin_1, ctx, ctx.tlist, nullptr);
-
-            for (ctx.scur = ctx.sbegin;
-                 !ctx.accept && ctx.scur != ctx.send;
-                 ++ctx.scur)
+            for (; ctx.spos != ctx.send; ++ctx.spos)
             {
-                run_threads(ctx);
+                ctx.scur = ctx.spos;
+                epsilon_extend(state_of_begin_, ctx, ctx.tlist, nullptr);
+                for (; !ctx.tlist.empty() && ctx.scur != ctx.send; ++ctx.scur)
+                {
+                    run_threads(ctx);
+                    if (ctx.accept)
+                        break;
+                }
+
+                if (ctx.accept)
+                    break;
             }
         }
         else
         {
-            epsilon_extend(state_of_match_begin_, ctx, ctx.tlist, nullptr);
+            epsilon_extend(state_of_begin_, ctx, ctx.tlist, nullptr);
 
-            for (ctx.scur = ctx.sbegin; ctx.scur != ctx.send; ++ctx.scur)
+            for (; ctx.scur != ctx.send; ++ctx.scur)
             {
                 ctx.accept = false;
                 run_threads(ctx);
@@ -735,19 +744,19 @@ private:
                             // Update capture data
                             auto index = states_data_.data[c].capture_num;
                             t->captures[index].begin =
-                                ctx.scur ? ctx.scur + 1 : ctx.sbegin;
+                                from == nullptr ? ctx.spos : ctx.scur + 1;
                         }
                         else if (s == state_predict_begin)
                         {
                             // Update predict
                             t->predict.begin =
-                                ctx.scur ? ctx.scur + 1 : ctx.sbegin;
+                                from == nullptr ? ctx.spos : ctx.scur + 1;
                         }
                         else
                         {
                             // Update reverse predict
                             t->reverse_predict.begin =
-                                ctx.scur ? ctx.scur + 1 : ctx.sbegin;
+                                from == nullptr ? ctx.spos : ctx.scur + 1;
                         }
 
                         branch_to_next(ctx, c, t);
@@ -824,33 +833,33 @@ private:
 
                     case state_line_start:
                     {
-                        if (!ctx.scur || *ctx.scur == '\n')
+                        if (ctx.scur == ctx.sbegin || *ctx.scur == '\n')
                             branch_to_next(ctx, c, t);
                         break;
                     }
 
                     case state_line_end:
                     {
-                        if ((!ctx.scur && ctx.sbegin == ctx.send) ||
-                            (ctx.scur && (ctx.scur + 1 == ctx.send || ctx.scur[1] == '\n')))
+                        if ((ctx.scur == ctx.sbegin && ctx.sbegin == ctx.send) ||
+                            (ctx.scur != ctx.sbegin && (ctx.scur + 1 == ctx.send || ctx.scur[1] == '\n')))
                             branch_to_next(ctx, c, t);
                         break;
                     }
 
                     case state_word_boundary:
                     {
-                        auto pc = ctx.scur;
-                        if (pc && (pc + 1 == ctx.send ||
-                                   isspace(static_cast<unsigned char>(pc[1]))))
+                        if (ctx.scur != ctx.sbegin && (
+                                ctx.scur + 1 == ctx.send ||
+                                isspace(static_cast<unsigned char>(ctx.scur[1]))))
                             branch_to_next(ctx, c, t);
                         break;
                     }
 
                     case state_not_word_boundary:
                     {
-                        auto pc = ctx.scur;
-                        if (pc && !(pc + 1 == ctx.send ||
-                                    isspace(static_cast<unsigned char>(pc[1]))))
+                        if (ctx.scur != ctx.sbegin && !(
+                                ctx.scur + 1 == ctx.send ||
+                                isspace(static_cast<unsigned char>(ctx.scur[1]))))
                             branch_to_next(ctx, c, t);
                         break;
                     }
@@ -890,13 +899,11 @@ private:
     void prepare_padding_states()
     {
         // Add padding states
-        // |-----|--------|---------------|-----|-------------|
-        // | any | repeat | capture begin | ... | capture end |
-        // |-----|--------|---------------|-----|-------------|
-        states_[0] = state_any;
-        add_repeat_state(1, 0, 0);
-        add_capture_begin(2);
-        add_capture_end(states_.size() - 1, 2);
+        // |---------------|-----|-------------|
+        // | capture begin | ... | capture end |
+        // |---------------|-----|-------------|
+        add_capture_begin(0);
+        add_capture_end(states_.size() - 1, 0);
     }
 
     void construct_states()
@@ -928,7 +935,7 @@ private:
                         if (!lps.empty())
                             out_edges.push_back({ lps.top(), i + 1 });
                         else
-                            out_edges.push_back({ 2, i + 1 });
+                            out_edges.push_back({ state_of_begin_, i + 1 });
                     }
                     break;
                 case '.':
@@ -1411,19 +1418,15 @@ private:
 
     static char_classes char_classes_;
 
-    // Padding size = 3
-    static constexpr const char *padding_ = "   ";
-    static const int padding_size_ = 3;
-    static const int state_of_match_begin_ = 2;
-    static const int state_of_search_begin_0 = 0;
-    static const int state_of_search_begin_1 = 2;
+    static const int padding_size_ = 1;
+    static const int state_of_begin_ = 0;
 
     // Regex string
     std::string re_;
     // States, format:
-    // |-----|--------|---------------|-----|-------------|
-    // | any | repeat | capture begin | ... | capture end |
-    // |-----|--------|---------------|-----|-------------|
+    // |---------------|-----|-------------|
+    // | capture begin | ... | capture end |
+    // |---------------|-----|-------------|
     states states_;
     // Data of states
     states_data states_data_;
@@ -1436,6 +1439,9 @@ private:
     // Context data
     mutable std::unique_ptr<context> context_;
 };
+
+// static
+const int regex::state_of_begin_;
 
 // static regex::char_classes_
 regex::char_classes regex::char_classes_ =
