@@ -383,7 +383,7 @@ struct context
     thread_list tlist;
     // Next match threads
     thread_list next_tlist;
-    // Pending threads for epsilon_extend
+    // Pending threads for generate_tlist
     thread_list pending_tlist;
     // Freed thread list for reuse
     thread_list free_tlist;
@@ -395,7 +395,7 @@ struct context
     // Number of capture states
     const int capture_count;
 
-    // Pending states for epsilon_extend
+    // Pending states for generate_tlist
     std::vector<std::pair<int, thread *>> pending_states;
 
     // For epsilon extend pending states
@@ -549,7 +549,7 @@ private:
             for (; ctx.spos != ctx.send; ++ctx.spos)
             {
                 ctx.scur = ctx.spos;
-                epsilon_extend(state_of_begin_, ctx, ctx.tlist, nullptr);
+                init_context_tlist(ctx);
                 for (; !ctx.tlist.empty() && ctx.scur != ctx.send; ++ctx.scur)
                 {
                     run_threads(ctx);
@@ -563,7 +563,7 @@ private:
         }
         else
         {
-            epsilon_extend(state_of_begin_, ctx, ctx.tlist, nullptr);
+            init_context_tlist(ctx);
 
             for (; ctx.scur != ctx.send; ++ctx.scur)
             {
@@ -596,19 +596,19 @@ private:
             {
             case state_char:
                 if (static_cast<unsigned char>(*ctx.scur) == states_data_.data[c].c)
-                    move_to_next(c, ctx);
+                    move_to_next(ctx, c);
                 break;
             case state_dot:
                 if (*ctx.scur != '\n')
-                    move_to_next(c, ctx);
+                    move_to_next(ctx, c);
                 break;
             case state_match_range:
                 if (match_range(*ctx.scur, c))
-                    move_to_next(c, ctx);
+                    move_to_next(ctx, c);
                 break;
             case state_exclude_range:
                 if (!match_range(*ctx.scur, c))
-                    move_to_next(c, ctx);
+                    move_to_next(ctx, c);
                 break;
             default:
                 break;
@@ -634,29 +634,24 @@ private:
         return false;
     }
 
-    void move_to_next(int v, context &ctx) const
+    void init_context_tlist(context &ctx) const
     {
-        auto out_it = states_data_.data[v].out_begin;
-        auto out_end = states_data_.data[v].out_end;
-
-        while (out_it < out_end)
-        {
-            auto n = states_data_.out_states[out_it];
-            auto tn = ctx.clone_to_pending_threads(ctx.current_thread, v);
-            epsilon_extend(n, ctx, ctx.next_tlist, tn);
-            ++out_it;
-        }
-
-        epsilon_extend(v + 1, ctx, ctx.next_tlist, ctx.current_thread);
+        ctx.epsilon_bits.clear();
+        ctx.pending_epsilon_extend_states(state_of_begin_, nullptr);
+        generate_tlist(ctx, ctx.tlist, true);
     }
 
-    void epsilon_extend(int v, context &ctx, thread_list &tlist, thread *from) const
+    void move_to_next(context &ctx, int v) const
     {
-        auto it = ctx.pending_states.size();
         ctx.epsilon_bits.clear();
-        ctx.pending_epsilon_extend_states(v, from);
-        auto end = ctx.pending_states.size();
+        branch_to_next(ctx, v, ctx.current_thread);
+        generate_tlist(ctx, ctx.next_tlist, false);
+    }
 
+    void generate_tlist(context &ctx, thread_list &tlist, bool init) const
+    {
+        int it = 0;
+        int end = ctx.pending_states.size();
         while (it < end)
         {
             for (; it < end; ++it)
@@ -740,19 +735,19 @@ private:
                             // Update capture data
                             auto index = states_data_.data[c].capture_num;
                             t->captures[index].begin =
-                                from == nullptr ? ctx.spos : ctx.scur + 1;
+                                init ? ctx.spos : ctx.scur + 1;
                         }
                         else if (s == state_predict_begin)
                         {
                             // Update predict
                             t->predict.begin =
-                                from == nullptr ? ctx.spos : ctx.scur + 1;
+                                init ? ctx.spos : ctx.scur + 1;
                         }
                         else
                         {
                             // Update reverse predict
                             t->reverse_predict.begin =
-                                from == nullptr ? ctx.spos : ctx.scur + 1;
+                                init ? ctx.spos : ctx.scur + 1;
                         }
 
                         branch_to_next(ctx, c, t);
@@ -883,13 +878,18 @@ private:
     void branch_to_next(context &ctx, int c, thread *t) const
     {
         // Branch all out states
-        ctx.pending_epsilon_extend_states(c + 1, t);
-        for (auto i = states_data_.data[c].out_begin;
-                i < states_data_.data[c].out_end; ++i)
+        auto out_it = states_data_.data[c].out_begin;
+        auto out_end = states_data_.data[c].out_end;
+
+        while (out_it < out_end)
         {
+            auto n = states_data_.out_states[out_it];
             auto tn = ctx.clone_to_pending_threads(t, c);
-            ctx.pending_epsilon_extend_states(states_data_.out_states[i], tn);
+            ctx.pending_epsilon_extend_states(n, tn);
+            ++out_it;
         }
+
+        ctx.pending_epsilon_extend_states(c + 1, t);
     }
 
     void prepare_padding_states()
