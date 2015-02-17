@@ -254,6 +254,10 @@ TEST_CASE(regex10)
     EXPECT_TRUE(match_res[3].str() == "08");
     EXPECT_TRUE(match_res[4].str() == "23");
     EXPECT_TRUE(match_res[5].str() == "10");
+
+    str = "/url/dir/xxx";
+    EXPECT_TRUE(regex_match("/([^/]+/[^/]+)/.*", str, &match_res));
+    EXPECT_TRUE(match_res[1].str() == "url/dir");
 }
 
 TEST_CASE(regex11)
