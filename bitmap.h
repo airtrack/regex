@@ -18,6 +18,9 @@ public:
         clear();
     }
 
+    bitmap(const bitmap&) = delete;
+    void operator = (const bitmap&) = delete;
+
     ~bitmap()
     {
         delete [] bits_;
