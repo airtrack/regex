@@ -508,8 +508,8 @@ public:
         construct_epsilon_extend();
     }
 
-    regex(const regex&) = delete;
-    regex& operator = (const regex&) = delete;
+    regex(const regex &) = delete;
+    void operator = (const regex &) = delete;
 
     const std::string& pattern() const
     {
