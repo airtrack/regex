@@ -3,6 +3,108 @@
 
 using namespace skl;
 
+TEST_CASE(thread_list)
+{
+    thread_list tl;
+    EXPECT_TRUE(tl.empty());
+    EXPECT_TRUE(tl.front() == tl.tail());
+
+    auto t1 = thread_list::create(0, 0);
+    auto t2 = thread_list::create(0, 0);
+    auto t3 = thread_list::create(0, 0);
+    tl.push_front(t1);
+    tl.push_front(t2);
+    tl.push_front(t3);
+
+    EXPECT_TRUE(tl.pop_front() == t3);
+    EXPECT_TRUE(tl.pop_front() == t2);
+    EXPECT_TRUE(tl.pop_front() == t1);
+    EXPECT_TRUE(tl.empty());
+    EXPECT_TRUE(tl.front() == tl.tail());
+
+    thread_list tl2;
+    tl2.push_front(t1);
+    tl2.push_front(t2);
+    tl2.push_front(t3);
+    tl.slice(tl2);
+
+    EXPECT_TRUE(tl2.empty());
+    EXPECT_TRUE(tl2.front() == tl2.tail());
+
+    EXPECT_TRUE(tl.pop_front() == t3);
+    EXPECT_TRUE(tl.pop_front() == t2);
+    EXPECT_TRUE(tl.pop_front() == t1);
+    EXPECT_TRUE(tl.empty());
+    EXPECT_TRUE(tl.front() == tl.tail());
+
+    auto t4 = thread_list::create(0, 0);
+    auto t5 = thread_list::create(0, 0);
+    auto t6 = thread_list::create(0, 0);
+
+    tl.push_front(t1);
+    tl.push_front(t2);
+    tl.push_front(t3);
+
+    tl2.push_front(t4);
+    tl2.push_front(t5);
+    tl2.push_front(t6);
+
+    tl.swap(tl2);
+
+    auto t = tl.front();
+    EXPECT_TRUE(t == t6);
+    t = t->next;
+    EXPECT_TRUE(t == t5);
+    t = t->next;
+    EXPECT_TRUE(t == t4);
+    t = t->next;
+    EXPECT_TRUE(t == tl.tail());
+
+    t = tl2.front();
+    EXPECT_TRUE(t == t3);
+    t = t->next;
+    EXPECT_TRUE(t == t2);
+    t = t->next;
+    EXPECT_TRUE(t == t1);
+    t = t->next;
+    EXPECT_TRUE(t == tl2.tail());
+
+    tl.slice(tl2);
+
+    t = tl.front();
+    EXPECT_TRUE(t == t3);
+    t = t->next;
+    EXPECT_TRUE(t == t2);
+    t = t->next;
+    EXPECT_TRUE(t == t1);
+    t = t->next;
+    EXPECT_TRUE(t == t6);
+    t = t->next;
+    EXPECT_TRUE(t == t5);
+    t = t->next;
+    EXPECT_TRUE(t == t4);
+    t = t->next;
+    EXPECT_TRUE(t == tl.tail());
+
+    EXPECT_TRUE(tl2.empty());
+
+    t1->split();
+    t2->split();
+    t3->split();
+    t4->split();
+    t5->split();
+    t6->split();
+
+    EXPECT_TRUE(tl.empty());
+
+    tl.push_front(t1);
+    tl.push_front(t2);
+    tl.push_front(t3);
+    tl.push_front(t4);
+    tl.push_front(t5);
+    tl.push_front(t6);
+}
+
 TEST_CASE(regex1)
 {
     EXPECT_TRUE(regex_match("", ""));

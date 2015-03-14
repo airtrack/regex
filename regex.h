@@ -243,13 +243,14 @@ struct thread
     // Split the thread from thread list
     void split()
     {
-        if (prev)
-            prev->next = next;
-        if (next)
-            next->prev = prev;
+        prev->next = next;
+        next->prev = prev;
         prev = nullptr;
         next = nullptr;
     }
+
+private:
+    friend class thread_list;
 
     thread()
         : repeat_num(0),
@@ -280,14 +281,15 @@ struct thread
 class thread_list
 {
 public:
-    thread_list() { }
+    thread_list() { reset(); }
+
     thread_list(const thread_list &) = delete;
     void operator = (const thread_list &) = delete;
 
     ~thread_list()
     {
-        auto t = head_->next;
-        while (t)
+        auto t = sentry_.next;
+        while (t != &sentry_)
         {
             auto tmp = t;
             t = t->next;
@@ -295,35 +297,45 @@ public:
         }
     }
 
+    inline void reset()
+    {
+        sentry_.prev = &sentry_;
+        sentry_.next = &sentry_;
+    }
+
+    inline const thread * tail() const
+    {
+        return &sentry_;
+    }
+
     // List is empty or not
     inline bool empty() const
     {
-        return head_->next == nullptr;
+        return sentry_.next == &sentry_;
     }
 
     // Return the first thread in the list
     inline thread * front() const
     {
-        return head_->next;
+        return sentry_.next;
     }
 
     // Push thread t into the front of list, then the list
     // own thread t
     inline void push_front(thread *t)
     {
-        t->prev = head_;
-        t->next = head_->next;
-        if (head_->next)
-            head_->next->prev = t;
-        head_->next = t;
+        t->next = sentry_.next;
+        sentry_.next->prev = t;
+        sentry_.next = t;
+        t->prev = &sentry_;
     }
 
     // Pop the first thread of list, then the list does not
     // own thread t yet
     inline thread * pop_front()
     {
-        assert(head_->next);
-        auto t = head_->next;
+        assert(!empty());
+        auto t = sentry_.next;
         t->split();
         return t;
     }
@@ -332,35 +344,41 @@ public:
     // the list
     inline void slice(thread_list &tl)
     {
-        if (tl.head_->next)
-        {
-            // Pointer to the last node of tl
-            auto pt = tl.head_->next;
-            while (pt->next) pt = pt->next;
+        if (tl.empty())
+            return ;
 
-            // The last node of tl pointer to the first node
-            // of this
-            pt->next = head_->next;
-            if (head_->next)
-                head_->next->prev = pt;
+        auto p = tl.sentry_.prev;
+        p->next = sentry_.next;
+        sentry_.next->prev = p;
 
-            // Pointer to the first node of tl
-            head_->next = tl.head_->next;
-            tl.head_->next->prev = head_;
+        auto n = tl.sentry_.next;
+        n->prev = &sentry_;
+        sentry_.next = n;
 
-            // Clear tl
-            tl.head_->next = nullptr;
-        }
+        tl.reset();
     }
 
     // Swap with thread_list tl
     inline void swap(thread_list &tl)
     {
-        std::swap(head_->next, tl.head_->next);
-        if (head_->next)
-            head_->next->prev = head_;
-        if (tl.head_->next)
-            tl.head_->next->prev = tl.head_;
+        if (tl.empty() && empty())
+            return ;
+
+        if (tl.empty())
+        {
+            tl.slice(*this);
+        }
+        else if (empty())
+        {
+            slice(tl);
+        }
+        else
+        {
+            thread_list tmp;
+            tmp.slice(tl);
+            tl.slice(*this);
+            slice(tmp);
+        }
     }
 
     // Create thread
@@ -371,7 +389,6 @@ public:
 
 private:
     thread sentry_;
-    thread *head_ = &sentry_;
 };
 
 typedef std::vector<std::vector<int>> vertex_extend_states;
@@ -585,7 +602,7 @@ private:
 
     void run_threads(context &ctx) const
     {
-        for (auto t = ctx.tlist.front(); t;)
+        for (auto t = ctx.tlist.front(); t != ctx.tlist.tail();)
         {
             ctx.current_thread = t;
             auto c = t->state_index;
