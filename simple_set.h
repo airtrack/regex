@@ -50,7 +50,7 @@ public:
 
     inline void erase(const T &o)
     {
-        auto it = std::find(begin(), end(), o);
+        auto it = std::find(elems_.begin(), elems_.end(), o);
         if (it != end())
             elems_.erase(it);
     }

@@ -16,7 +16,7 @@ public:
             throw std::runtime_error("can not open file " + std::string(BENCHMARK_TEST_FILE) + ".");
 
         fseek(file, 0, SEEK_END);
-        auto size = ftell(file);
+        auto size = static_cast<std::size_t>(ftell(file));
         if (size == 0)
         {
             fclose(file);
@@ -26,7 +26,12 @@ public:
         fseek(file, 0, SEEK_SET);
         buffer_.resize(size);
 
-        fread(&buffer_[0], 1, size, file);
+        if (fread(&buffer_[0], 1, size, file) != size)
+        {
+            fclose(file);
+            throw std::runtime_error("fread " + std::string(BENCHMARK_TEST_FILE) + " error.");
+        }
+
         fclose(file);
     }
 
@@ -51,15 +56,22 @@ std::unique_ptr<data> g_data;
 
 void std_regex_search_all(const std::string &re, const char *begin, const char *end)
 {
-    std::regex r(re);
-    std::cmatch match;
-    std::vector<std::cmatch> results;
-
-    if (std::regex_search(begin, end, match, r))
+    try
     {
-        results.push_back(match);
-        while (std::regex_search(match[0].second, end, match, r))
+        std::regex r(re);
+        std::cmatch match;
+        std::vector<std::cmatch> results;
+
+        if (std::regex_search(begin, end, match, r))
+        {
             results.push_back(match);
+            while (std::regex_search(match[0].second, end, match, r))
+                results.push_back(match);
+        }
+    }
+    catch (const std::regex_error &e)
+    {
+        printf("%s\n", e.what());
     }
 }
 
