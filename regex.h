@@ -1548,6 +1548,21 @@ inline auto regex_search_all(const std::string &re,
     return regex_search_all(r, begin, end);
 }
 
+inline void regex_replace(std::string &str, const regex &re, const std::string &rep)
+{
+    match_result res;
+    auto begin = str.c_str();
+    auto end = begin + str.size();
+    while (regex_search(re, begin, end, &res)) {
+        size_t pos = res.start_pos() - &str[0];
+        size_t len = res.end_pos() - res.start_pos();
+
+        if (pos >= str.size()) return;
+
+        str.replace(pos, len, rep);
+    }
+}
+
 } // namespace skl
 
 #endif // REGEX_H
