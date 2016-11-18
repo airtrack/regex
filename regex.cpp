@@ -1,10 +1,10 @@
 #include "regex.h"
 
 // static
-const int regex::state_of_begin_;
+const int skl::regex::state_of_begin_;
 
 // static regex::char_classes_
-regex::char_classes regex::char_classes_ =
+skl::regex::char_classes skl::regex::char_classes_ =
 {
     { "alnum", { char_range('A', 'Z'), char_range('a', 'z'), char_range('0', '9') } },
     { "alpha", { char_range('A', 'Z'), char_range('a', 'z') } },
